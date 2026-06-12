@@ -1,0 +1,55 @@
+#define TAG "APEX_POWER_UP_LOG"
+#include "esp_log.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+// 引入框架核心头文件 (包含注册接口和响应助手)
+#include "apex_cmd_executor.h"
+#include "apex_power_up.h"
+#include "cJSON.h"
+
+#define FUNCTION_KEY "powerUp"
+
+#define PARAM_SCHEMA "{}"
+
+// ==========================================
+// 6. 开机/唤醒模块 (apex_power_up)
+// ==========================================
+static int apex_power_up_handler(cJSON *params, const char *msg_id, cJSON **res_data)
+{
+    if (!g_apex_state.is_standby)
+    {
+        return APEX_OK; // 幂等
+    }
+
+    ESP_LOGI(TAG, "从待机模式唤醒...");
+    g_apex_state.is_standby = false;
+
+    // TODO: 通知应用层恢复外设供电
+    // app_hardware_resume();
+
+    return APEX_OK;
+}
+
+// ============================================================================
+//  组件注册入口 (在 app_main 中由框架统一调用)
+// ============================================================================
+esp_err_t apex_power_up_init(void)
+{
+    apex_cmd_entry_t entry = {
+        .cmd_key = FUNCTION_KEY,
+        .function_name = "系统开机",
+        .function_desc = "系统开机功能",
+        .function_params = PARAM_SCHEMA, // 自动引用上面拼接好的 Schema 常量
+        .role = "user",
+        .version = "1.0.0",
+        .flags = APEX_CMD_FLAG_ALWAYS_ALLOWED, // 常驻开放：开机唤醒在任何情况下都应可执行
+        .handler = apex_power_up_handler,
+        .is_persistent = false, // 非持久化：开机唤醒是瞬间操作，执行即完成
+        .stop_handler = NULL};  // 唤醒无需停止回调
+
+    // 注册到全局 Executor 路由表
+    apex_cmd_register(entry);
+    ESP_LOGI(TAG, "组件注册成功: %s (v%s)", entry.cmd_key, entry.version);
+    return ESP_OK;
+}
