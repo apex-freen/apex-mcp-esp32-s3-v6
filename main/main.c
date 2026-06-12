@@ -13,7 +13,7 @@ void app_main(void)
 {
     // 查看 main 任务栈剩余
     UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-    ESP_LOGI("STACK", "Main task stack free: %d bytes", uxHighWaterMark);
+    ESP_LOGI(TAG, "Main task stack free: %d bytes", uxHighWaterMark);
     // 初始化所有模块
     ESP_ERROR_CHECK(apex_core_init());
 
@@ -21,7 +21,7 @@ void app_main(void)
     sync_add_init();
     // 再次查看
     uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-    ESP_LOGI("STACK", "Main task stack free after init: %d bytes", uxHighWaterMark);
+    ESP_LOGI(TAG, "Main task stack free after init: %d bytes", uxHighWaterMark);
     // 主循环（空循环，所有逻辑通过事件驱动）
     while (1)
     {

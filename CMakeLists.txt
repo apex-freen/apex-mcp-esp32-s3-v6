@@ -6,4 +6,4 @@ cmake_minimum_required(VERSION 3.22)
 set(EXTRA_COMPONENT_DIRS "apex_frame" "common")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(apex-v6)
+project(apex-esp32-s3-v6)

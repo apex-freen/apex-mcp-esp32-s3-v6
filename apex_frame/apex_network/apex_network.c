@@ -72,27 +72,27 @@ static void config_update_handler(void *arg, esp_event_base_t base, int32_t id, 
     }
 }
 
-// --- 步骤 2：静态 IP 配置应用 ---
-static void apply_static_ip(esp_netif_t *netif)
-{
-    if (strlen(g_apex_config.wifi_sta.ip_addr) > 0)
-    {
-        esp_netif_dhcpc_stop(netif);
-        esp_netif_ip_info_t ip_info;
+// --- 步骤 2：静态 IP 配置应用 ---  // 暂时不用设备配置静态ip 所以这个函数就不用了 预留万一以后有这个需求。
+// static void apply_static_ip(esp_netif_t *netif)
+// {
+//     if (strlen(g_apex_config.wifi_sta.ip_addr) > 0)
+//     {
+//         esp_netif_dhcpc_stop(netif);
+//         esp_netif_ip_info_t ip_info;
 
-        // 修复 ESP-IDF v6.0 中的 IP 转换方法
-        ip4_addr_set_u32(&ip_info.ip, ipaddr_addr(g_apex_config.wifi_sta.ip_addr));
-        ip4_addr_set_u32(&ip_info.gw, ipaddr_addr(g_apex_config.wifi_sta.gw_addr));
-        ip4_addr_set_u32(&ip_info.netmask, ipaddr_addr(g_apex_config.wifi_sta.netmask_addr));
+//         // 修复 ESP-IDF v6.0 中的 IP 转换方法
+//         ip4_addr_set_u32(&ip_info.ip, ipaddr_addr(g_apex_config.wifi_sta.ip_addr));
+//         ip4_addr_set_u32(&ip_info.gw, ipaddr_addr(g_apex_config.wifi_sta.gw_addr));
+//         ip4_addr_set_u32(&ip_info.netmask, ipaddr_addr(g_apex_config.wifi_sta.netmask_addr));
 
-        esp_netif_set_ip_info(netif, &ip_info);
-        ESP_LOGI(TAG, "已配置静态 IP: %s", g_apex_config.wifi_sta.ip_addr);
-    }
-    else
-    {
-        esp_netif_dhcpc_start(netif);
-    }
-}
+//         esp_netif_set_ip_info(netif, &ip_info);
+//         ESP_LOGI(TAG, "已配置静态 IP: %s", g_apex_config.wifi_sta.ip_addr);
+//     }
+//     else
+//     {
+//         esp_netif_dhcpc_start(netif);
+//     }
+// }
 
 // 新增：DHCP 配置应用 ，因为作为设备，应该不需要用户去配置 ip等等，除非有个别极端用户，更多的应该是希望设备自己连
 esp_err_t apply_dhcp(esp_netif_t *netif)
