@@ -110,7 +110,8 @@ void apex_config_print(void)
     ESP_LOGI(TAG, "--- MQTT 配置 ---");
     ESP_LOGI(TAG, "  Broker: [%s]:[%d]", g_apex_config.mqtt.broker_addr, g_apex_config.mqtt.port);
     ESP_LOGI(TAG, "  ClientID: [%s]", g_apex_config.mqtt.client_id);
-    ESP_LOGI(TAG, "  USERNAME: [%s]", g_apex_config.mqtt.username);
+    // ESP_LOGI(TAG, "  USERNAME: [%s]", g_apex_config.mqtt.username);
+    ESP_LOGI(TAG, "  USERNAME: [%s]", g_apex_config.device.device_name);
     ESP_LOGI(TAG, "  PASSWORD: [%s]", g_apex_config.mqtt.password);
 
     ESP_LOGI(TAG, "--- DEVICE 配置 ---");

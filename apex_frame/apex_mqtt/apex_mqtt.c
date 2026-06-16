@@ -117,7 +117,8 @@ static void start_mqtt_client(void)
         },
         .credentials = {
             .client_id = g_apex_config.mqtt.client_id,
-            .username = g_apex_config.mqtt.username,
+            // .username = g_apex_config.mqtt.username,
+            .username = g_apex_config.device.device_name, // 默认使用设备名称
             .authentication.password = g_apex_config.mqtt.password,
         },
         .session = {
