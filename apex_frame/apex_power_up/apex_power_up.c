@@ -10,7 +10,10 @@
 
 #define FUNCTION_KEY "powerUp"
 
-#define PARAM_SCHEMA "{}"
+static const function_param_desc_t function_params[] =
+    {
+        // 数组为空 → 输出 {}
+};
 
 // ==========================================
 // 6. 开机/唤醒模块 (apex_power_up)
@@ -36,11 +39,17 @@ static int apex_power_up_handler(cJSON *params, const char *msg_id, cJSON **res_
 // ============================================================================
 esp_err_t apex_power_up_init(void)
 {
+    static char function_params_json_buf[16];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "系统开机",
         .function_desc = "系统开机功能",
-        .function_params = PARAM_SCHEMA, // 自动引用上面拼接好的 Schema 常量
+        .function_params = function_params_json_buf,
         .role = "user",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_ALWAYS_ALLOWED, // 常驻开放：开机唤醒在任何情况下都应可执行

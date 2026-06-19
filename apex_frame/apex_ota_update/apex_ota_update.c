@@ -14,7 +14,15 @@
 
 #define FUNCTION_KEY "apexOtaUpdate"
 #define KEY_PARAM_A "url"
-#define PARAM_SCHEMA "{\"" KEY_PARAM_A "\":\"string\"}"
+static const function_param_desc_t function_params[] =
+    {
+        {
+            .key = KEY_PARAM_A, // 宏展开是 "add"
+            .type = "string",
+            // 其他字段不写，编译器自动置 0/NULL
+        },
+};
+
 static esp_err_t do_http_ota(const char *url)
 {
     esp_http_client_config_t http_config = {
@@ -226,11 +234,17 @@ error_exit:
 // ============================================================================
 esp_err_t apex_ota_update_init(void)
 {
+    static char function_params_json_buf[1024];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "固件升级",
         .function_desc = "固件升级到最新版本",
-        .function_params = PARAM_SCHEMA,
+        .function_params = function_params_json_buf,
         .role = "admin",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_EXCLUSIVE, // ✅ 独占指令，升级的时候 ，不允许其他动作进来

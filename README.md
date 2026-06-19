@@ -379,65 +379,90 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 
 适用场景：可瞬间完成的参数查询、简单计算、状态设置等轻量业务。
 
+> 对应源码：[components/sync_add/sync_add.c](components/sync_add/sync_add.c)
+
 ```c
-#define TAG "MY_FEATURE"
+#define TAG "SYNC_ADD_LOG"
 #include "esp_log.h"
 #include "apex_cmd_executor.h"
-#include "apex_my_feature.h"
-#include "cJSON.h"
+#include "sync_add.h"
 
-#define FUNCTION_KEY  "readSensor"
-#define KEY_PARAM_A   "sensor_id"
-#define PARAM_SCHEMA  "{\"" KEY_PARAM_A "\":\"string\"}"
+// ============================================================================
+// 1. 常量与参数定义区
+// ============================================================================
+static const char *FUNCTION_KEY = "sync_add";
 
-static int read_sensor_handler(cJSON *params, const char *msg_id, cJSON **res_data)
+#define KEY_PARAM_A "add"
+#define KEY_PARAM_B "adder"
+static const function_param_desc_t function_params[] = {
+    {.key = KEY_PARAM_A, .type = "int", .has_min = 1, .min_val = 0,
+     .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
+     .unit = "celsius", .has_default = 1, .default_val = 50},
+    {.key = KEY_PARAM_B, .type = "int",
+     .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},
+};
+
+// ============================================================================
+// 2. 同步 Handler（直接在当前线程执行，不创建新任务）
+// ============================================================================
+static int sync_add_handler(cJSON *params, const char *msg_id, cJSON **res_data)
 {
-    // 步骤 1: 参数合法性校验
-    cJSON *item = cJSON_GetObjectItem(params, KEY_PARAM_A);
-    if (!cJSON_IsString(item)) {
-        ESP_LOGW(TAG, "缺少参数或参数类型错误: %s", KEY_PARAM_A);
+    ESP_LOGI(TAG, "收到同步加法请求 [ID: %s]", msg_id);
+
+    // 步骤 1: 参数校验
+    if (params == NULL || !cJSON_IsObject(params)) {
+        ESP_LOGW(TAG, "参数格式错误，期望一个 JSON Object");
         return APEX_ERR_PARAM;   // 框架自动返回错误响应并解锁
+    }
+    cJSON *item_a = cJSON_GetObjectItem(params, KEY_PARAM_A);
+    cJSON *item_b = cJSON_GetObjectItem(params, KEY_PARAM_B);
+    if (!cJSON_IsNumber(item_a) || !cJSON_IsNumber(item_b)) {
+        ESP_LOGW(TAG, "参数缺失或类型错误: 需要 %s(int) 和 %s(int)", KEY_PARAM_A, KEY_PARAM_B);
+        return APEX_ERR_PARAM;
     }
 
     // 步骤 2: 执行业务逻辑
-    float value = read_sensor_by_id(item->valuestring);
+    int sum = item_a->valueint + item_b->valueint;
 
-    // 步骤 3: 构造业务返回数据
+    // 步骤 3: 构造结果，框架自动包装并加密发送
     cJSON *data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(data, "temperature", value);
-
-    // 步骤 4: 回传结果数据
+    cJSON_AddNumberToObject(data, "result", sum);
     *res_data = data;
 
-    // 步骤 5: 返回同步成功状态
-    // 框架自动推送成功响应 + 自动解锁指令槽位
-    return APEX_OK;
+    return APEX_OK;   // 同步完成，框架自动发结果 + 解锁
 }
 
-void apex_my_feature_init(void)
+// ============================================================================
+// 3. 组件注册入口
+// ============================================================================
+void sync_add_init(void)
 {
+    static char function_params_json_buf[1024];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+    build_function_param_desc_json(function_params, count, function_params_json_buf, sizeof(function_params_json_buf));
+
     apex_cmd_entry_t entry = {
         .cmd_key         = FUNCTION_KEY,
-        .function_name   = "读取传感器",
-        .function_desc   = "根据 sensor_id 读取设备温度值",
-        .function_params = PARAM_SCHEMA,
+        .function_name   = "同步加法计算",
+        .function_desc   = "同步加法：接收两个参数，立即返回计算结果",
+        .function_params = function_params_json_buf,
         .role            = "user",
         .version         = "1.0.0",
-        .flags           = APEX_CMD_FLAG_PARALLEL,   // 支持并行执行
-        .handler         = read_sensor_handler,
-        .is_persistent   = false,                     // 非持久化指令
+        .flags           = APEX_CMD_FLAG_PARALLEL,   // 并行指令，不锁定系统
+        .handler         = sync_add_handler,
+        .is_persistent   = false,                     // 非持久化动作
         .stop_handler    = NULL,
     };
     apex_cmd_register(entry);
-    ESP_LOGI(TAG, "模块注册成功: %s", FUNCTION_KEY);
+    ESP_LOGI(TAG, "组件注册成功: %s (v%s)", entry.cmd_key, entry.version);
 }
 ```
 
 **指令生命周期**：
 ```
-模块注册指令 → 接收指令 → 锁定指令状态 → 执行同步 handler
+组件注册 → 接收指令 → 锁定槽位 → 执行 sync_add_handler
     → 返回 APEX_OK → 框架自动推送成功响应 {"code":0,"result":{...}}
-    → 自动解锁槽位，指令执行结束
+    → 自动解锁槽位，指令结束
 ```
 
 ---
@@ -446,65 +471,121 @@ void apex_my_feature_init(void)
 
 适用场景：耗时较长的业务操作，如 OTA 升级、长时间运算、网络请求等。
 
+> 对应源码：[components/async_add/async_add.c](components/async_add/async_add.c)
+
 ```c
-#define TAG "ASYNC_DEMO"
+#define TAG "ASYNC_ADD_LOG"
 #include "esp_log.h"
-#include "apex_cmd_executor.h"
-#include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <string.h>
+#include <stdlib.h>
+#include "apex_cmd_executor.h"
+#include "async_add.h"
 
+// ============================================================================
+// 1. 常量与参数定义区
+// ============================================================================
+static const char *FUNCTION_KEY = "async_add";
+
+#define KEY_PARAM_A "add"
+#define KEY_PARAM_B "adder"
+static const function_param_desc_t function_params[] = {
+    {.key = KEY_PARAM_A, .type = "int", .has_min = 1, .min_val = 0,
+     .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
+     .unit = "celsius", .has_default = 1, .default_val = 50},
+    {.key = KEY_PARAM_B, .type = "int",
+     .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},
+};
+
+// ============================================================================
+// 2. 异步任务上下文结构体
+// ============================================================================
 typedef struct {
-    char msg_id[64];
-    char param[128];
-} my_async_ctx_t;
+    int a, b;
+    char msg_id[48]; // 【必须】保存原始请求的唯一标识，用于异步回调
+} add_async_ctx_t;
 
-static void my_async_task(void *arg)
+// ============================================================================
+// 3. 异步后台任务（真正的耗时逻辑在这里）
+// ============================================================================
+static void add_async_task(void *pvParameters)
 {
-    my_async_ctx_t *ctx = (my_async_ctx_t *)arg;
+    add_async_ctx_t *ctx = (add_async_ctx_t *)pvParameters;
+    ESP_LOGI(TAG, "异步计算开始: %d + %d (ID: %s)", ctx->a, ctx->b, ctx->msg_id);
 
-    // 模拟耗时业务操作
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    int result = do_complex_work(ctx->param);
+    // 模拟耗时操作（读取传感器、等待外设、网络请求等）
+    vTaskDelay(pdMS_TO_TICKS(100000)); // 100秒后才返回，用于测试异步中间状态
+    int result_value = ctx->a + ctx->b;
 
-    // 构造返回结果
-    cJSON *data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(data, "output", result);
-
-    // 统一收尾：推送完成响应 + 解锁指令槽位
-    apex_cmd_finish(ctx->msg_id, APEX_OK, data);
-
+    // 回传最终结果并释放状态机
+    cJSON *res_data = cJSON_CreateObject();
+    cJSON_AddNumberToObject(res_data, "result", result_value);
+    apex_cmd_finish(ctx->msg_id, APEX_OK, res_data); // 自动发响应 + 解锁槽位
     free(ctx);
     vTaskDelete(NULL);
 }
 
-static int my_async_handler(cJSON *params, const char *msg_id, cJSON **res_data)
+// ============================================================================
+// 4. Handler（运行在 Executor 线程上下文）
+// ============================================================================
+static int apex_cmd_add_handler(cJSON *params, const char *msg_id, cJSON **res_data)
 {
-    my_async_ctx_t *ctx = calloc(1, sizeof(my_async_ctx_t));
-    if (!ctx) {
-        ESP_LOGE(TAG, "异步上下文内存分配失败");
-        return APEX_ERR_SYS;
+    ESP_LOGI(TAG, "收到 %s 指令，准备解析参数", FUNCTION_KEY);
+
+    if (params == NULL || !cJSON_IsObject(params)) {
+        ESP_LOGW(TAG, "参数格式错误，期望一个 JSON Object");
+        return APEX_ERR_PARAM;
+    }
+    cJSON *item_a = cJSON_GetObjectItem(params, KEY_PARAM_A);
+    cJSON *item_b = cJSON_GetObjectItem(params, KEY_PARAM_B);
+    if (!cJSON_IsNumber(item_a) || !cJSON_IsNumber(item_b)) {
+        ESP_LOGW(TAG, "参数缺失或类型错误: 需要 %s(int) 和 %s(int)", KEY_PARAM_A, KEY_PARAM_B);
+        return APEX_ERR_PARAM;
     }
 
-    strlcpy(ctx->msg_id, msg_id, sizeof(ctx->msg_id));
-    strlcpy(ctx->param, "demo_param", sizeof(ctx->param));
+    // 分配并填充异步上下文
+    add_async_ctx_t *ctx = calloc(1, sizeof(add_async_ctx_t));
+    if (!ctx) { ESP_LOGE(TAG, "内存分配失败"); return APEX_ERR_SYS; }
+    ctx->a = item_a->valueint;
+    ctx->b = item_b->valueint;
+    if (msg_id != NULL)
+        strlcpy(ctx->msg_id, msg_id, sizeof(ctx->msg_id));
 
-    BaseType_t ret = xTaskCreate(my_async_task, "my_async_task", 4096, ctx, 5, NULL);
-    if (ret != pdPASS) {
-        free(ctx);
-        ESP_LOGE(TAG, "异步任务创建失败");
-        return APEX_ERR_SYS;
-    }
+    // 创建 FreeRTOS 异步任务
+    BaseType_t ret = xTaskCreate(add_async_task, "task_add", 4096, ctx, 5, NULL);
+    if (ret != pdPASS) { free(ctx); return APEX_ERR_SYS; }
 
-    // 返回异步就绪状态，框架维持锁定
-    return APEX_ASYNC_OK;
+    return APEX_ASYNC_OK;   // 框架维持锁定，等待异步回调
+}
+
+// ============================================================================
+// 5. 组件注册入口
+// ============================================================================
+void async_add_init(void)
+{
+    static char function_params_json_buf[1024];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+    build_function_param_desc_json(function_params, count, function_params_json_buf, sizeof(function_params_json_buf));
+
+    apex_cmd_entry_t entry = {
+        .cmd_key         = FUNCTION_KEY,
+        .function_name   = "异步加法计算",
+        .function_desc   = "模拟耗时操作：接收两个参数，延迟100秒后返回加法结果",
+        .function_params = function_params_json_buf,
+        .role            = "user",
+        .version         = "1.0.1",
+        .handler         = apex_cmd_add_handler,
+    };
+    apex_cmd_register(entry);
+    ESP_LOGI(TAG, "组件注册成功: %s (v%s)", entry.cmd_key, entry.version);
 }
 ```
 
 **指令生命周期**：
 ```
-接收指令 → 锁定槽位 → handler 创建异步任务 → 返回 APEX_ASYNC_OK
-    → 框架推送 processing 响应（不解锁）→ 后台任务执行业务逻辑
+组件注册 → 接收指令 → 锁定槽位 → handler 创建异步任务 → 返回 APEX_ASYNC_OK
+    → 框架推送 processing 响应（不解锁）→ 后台任务执行业务
     → 调用 apex_cmd_finish → 推送 completed 响应 + 解锁槽位，任务结束
 ```
 
@@ -579,7 +660,8 @@ void motor_module_init(void)
 
 新增模块/指令后，注册上线前逐项核对：
 
-- [ ] `PARAM_SCHEMA` 定义规范（格式为 `{"key":"type"}`，无参数时填空对象 `{}`）
+- [ ] `function_param_desc_t` 数组定义规范，调用 `build_function_param_desc_json()` 生成 JSON Schema
+- [ ] KEY 宏定义与 `function_params` 中的 `.key` 字段一一对应
 - [ ] `function_desc` 描述准确、简洁，清晰说明指令功能
 - [ ] `role` 权限配置正确（`admin` / `user`）
 - [ ] `flags` 匹配业务场景（`PARALLEL` / `EXCLUSIVE` / `FORCE` / `ALWAYS_ALLOWED`）

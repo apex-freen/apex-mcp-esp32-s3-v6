@@ -6,7 +6,14 @@
 
 #define FUNCTION_KEY "stop"
 #define KEY_PARAM_A "fun_key"
-#define PARAM_SCHEMA "{\"" KEY_PARAM_A "\":\"string\"}"
+static const function_param_desc_t function_params[] =
+    {
+        {
+            .key = KEY_PARAM_A, // 宏展开是 "add"
+            .type = "string",
+            // 其他字段不写，编译器自动置 0/NULL
+        },
+};
 
 // ==========================================
 // 通用停止指令 Handler
@@ -50,12 +57,18 @@ static int apex_stop_handler(cJSON *params, const char *msg_id, cJSON **res_data
 // ==========================================
 esp_err_t apex_stop_init(void)
 {
+    static char function_params_json_buf[1024];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY, // ✅ 模块名称：统一且干练
         .function_name = "通用停止指令",
         .function_desc = "强制停止指定的持续性动作或异步任务",
-        .function_params = PARAM_SCHEMA, // {"fun_key":"string"} — 指定要停止的目标指令 key
-        .role = "admin",                 // 停止别的指令通常需要较高权限
+        .function_params = function_params_json_buf, // {"fun_key":"string"} — 指定要停止的目标指令 key
+        .role = "admin",                             // 停止别的指令通常需要较高权限
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // ✅ 关键：必须是 FORCE，无视设备当前的 BUSY 状态
         .is_persistent = false,       // 停止指令本身是个瞬间动作

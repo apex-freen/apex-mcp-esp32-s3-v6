@@ -10,19 +10,63 @@
 #include "async_add.h"
 #include "cJSON.h"
 
+// 参数样例
+// static const char* mode_values[] = {"cool", "heat", "fan", "dry", "auto"};
+
+// static const function_param_desc_t function_params[] =
+// {
+//     {
+//         .key         = "add",
+//         .type        = "int",
+//         .has_min     = 1, .min_val  = 0,
+//         .has_max     = 1, .max_val  = 100,
+//         .has_step    = 1, .step_val = 1,
+//     },
+//     {
+//         .key         = "adder",
+//         .type        = "int",
+//         .has_min     = 1, .min_val  = 0,
+//         .has_max     = 1, .max_val  = 200,
+//     },
+//     {
+//         .key         = "mode",
+//         .type        = "string",
+//         .enum_vals   = mode_values,
+//         .enum_count  = 5,
+//         .has_default = 1, .default_val = 0,   // 0 = mode_values[0] = "cool"
+//     },
+// };
+
 // ============================================================================
 // 1. 常量与参数定义区 (防止硬编码，一处修改，全局生效)
 // ============================================================================
 // 指令注册名 (供路由使用)
 static const char *FUNCTION_KEY = "async_add";
-
 // JSON 参数键名定义 (防止在提取参数和描述 Schema 时写错字)
 #define KEY_PARAM_A "add"
 #define KEY_PARAM_B "adder"
-
-// 利用 C 语言的宏拼接特性，自动生成自描述的 JSON Schema 字符串
-// 展开后等价于: "{\"add\":\"int\", \"adder\":\"int\"}"
-#define PARAM_SCHEMA "{\"" KEY_PARAM_A "\":\"int\", \"" KEY_PARAM_B "\":\"int\"}"
+static const function_param_desc_t function_params[] =
+    {
+        {.key = KEY_PARAM_A,
+         .type = "int",
+         .has_min = 1,
+         .min_val = 0,
+         .has_max = 1,
+         .max_val = 100,
+         .has_step = 1,
+         .step_val = 1,
+         .unit = "celsius",
+         .has_default = 1,
+         .default_val = 50},
+        {
+            .key = KEY_PARAM_B,
+            .type = "int",
+            .has_min = 1,
+            .min_val = 0,
+            .has_max = 1,
+            .max_val = 200,
+        },
+};
 
 // ============================================================================
 // 2. 异步任务专用的上下文结构体
@@ -118,11 +162,17 @@ static int apex_cmd_add_handler(cJSON *params, const char *msg_id, cJSON **res_d
 // ============================================================================
 void async_add_init(void)
 {
+    static char function_params_json_buf[1024];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "异步加法计算",
         .function_desc = "模拟耗时操作：接收两个参数，延迟100秒后返回加法结果",
-        .function_params = PARAM_SCHEMA, // 自动引用上面拼接好的 Schema 常量
+        .function_params = function_params_json_buf,
         .role = "user",
         .version = "1.0.1",
         .handler = apex_cmd_add_handler};

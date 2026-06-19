@@ -758,3 +758,99 @@ esp_err_t apex_crypto_init_with_pwd(const char *pwd)
 
     return payload_crypto_init(final_psk);
 }
+
+char *build_function_param_desc_json(const function_param_desc_t *params, int count,
+                                     char *out_buf, int buf_size)
+{
+    if (!params || !out_buf || buf_size < 4)
+    {
+        if (out_buf && buf_size > 0)
+            out_buf[0] = '\0';
+        return NULL;
+    }
+
+    // 根对象
+    cJSON *root = cJSON_CreateObject();
+    if (!root)
+    {
+        out_buf[0] = '\0';
+        return NULL;
+    }
+
+    for (int i = 0; i < count; i++)
+    {
+        const function_param_desc_t *p = &params[i];
+
+        // 每个参数的子对象
+        cJSON *obj = cJSON_CreateObject();
+        if (!obj)
+        {
+            cJSON_Delete(root);
+            out_buf[0] = '\0';
+            return NULL;
+        }
+
+        // 1. type（必须有）
+        cJSON_AddStringToObject(obj, "type", p->type);
+
+        // 2. 枚举值
+        if (p->enum_count > 0 && p->enum_vals)
+        {
+            cJSON *arr = cJSON_CreateArray();
+            for (int j = 0; j < p->enum_count; j++)
+            {
+                cJSON_AddItemToArray(arr, cJSON_CreateString(p->enum_vals[j]));
+            }
+            cJSON_AddItemToObject(obj, "values", arr);
+        }
+
+        // 3. 数值范围
+        if (strcmp(p->type, "int") == 0 || strcmp(p->type, "float") == 0)
+        {
+            if (p->has_min)
+                cJSON_AddNumberToObject(obj, "min", p->min_val);
+            if (p->has_max)
+                cJSON_AddNumberToObject(obj, "max", p->max_val);
+            if (p->has_step)
+                cJSON_AddNumberToObject(obj, "step", p->step_val);
+            if (p->unit)
+                cJSON_AddStringToObject(obj, "unit", p->unit);
+        }
+
+        // 4. 默认值
+        if (p->has_default)
+        {
+            if (strcmp(p->type, "string") == 0 && p->enum_count > 0)
+            {
+                cJSON_AddStringToObject(obj, "default", p->enum_vals[p->default_val]);
+            }
+            else if (strcmp(p->type, "bool") == 0)
+            {
+                cJSON_AddBoolToObject(obj, "default", p->default_val ? cJSON_True : cJSON_False);
+            }
+            else
+            {
+                cJSON_AddNumberToObject(obj, "default", p->default_val);
+            }
+        }
+
+        cJSON_AddItemToObject(root, p->key, obj);
+    }
+
+    // 输出到缓冲区
+    char *json_str = cJSON_PrintUnformatted(root);
+    if (!json_str)
+    {
+        cJSON_Delete(root);
+        out_buf[0] = '\0';
+        return NULL;
+    }
+
+    // 截断到缓冲区大小
+    strncpy(out_buf, json_str, buf_size - 1);
+    out_buf[buf_size - 1] = '\0';
+
+    free(json_str);
+    cJSON_Delete(root);
+    return out_buf;
+}

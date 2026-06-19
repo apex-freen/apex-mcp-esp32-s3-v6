@@ -11,7 +11,10 @@
 
 #define FUNCTION_KEY "reStart"
 
-#define PARAM_SCHEMA "{}"
+static const function_param_desc_t function_params[] =
+    {
+        // 数组为空 → 输出 {}
+};
 
 // 延迟重启任务：给底层网络栈 1~2 秒的时间把"重启成功"响应发给云端
 static void apex_delayed_restart_task(void *arg)
@@ -45,11 +48,17 @@ static int apex_restart_handler(cJSON *params, const char *msg_id, cJSON **res_d
 // ============================================================================
 esp_err_t apex_restart_init(void)
 {
+    static char function_params_json_buf[16];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "系统重启",
         .function_desc = "系统重启功能，重要操作需谨慎",
-        .function_params = PARAM_SCHEMA, // 自动引用上面拼接好的 Schema 常量
+        .function_params = function_params_json_buf,
         .role = "user",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // 强制属性：重启为最高优先级，无视系统忙碌状态

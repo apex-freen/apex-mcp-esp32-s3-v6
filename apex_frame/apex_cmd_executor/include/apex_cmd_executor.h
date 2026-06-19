@@ -101,6 +101,32 @@ typedef struct
     apex_stop_handler_t stop_handler;
 } apex_cmd_entry_t;
 
+// 描述"一个参数的元信息"
+typedef struct
+{
+    const char *key;  // 参数名: "add", "adder"...
+    const char *type; // 类型: "int", "float", "bool", "string"
+
+    // 数值范围约束（数值类型用）
+    int has_min; // 是否有最小值
+    int min_val;
+    int has_max;
+    int max_val;
+    int has_step;
+    int step_val;
+
+    // 枚举约束（string 类型用）
+    const char **enum_vals; // 可选值数组: ["cool", "heat"]...
+    int enum_count;         // 枚举值个数
+
+    // 单位（可选）
+    const char *unit;
+
+    // 默认值
+    int has_default;
+    int default_val;
+} function_param_desc_t;
+
 // 2. 扔进“安全管道”：解码 -> 解密 -> 分发
 // 这里的 apex_process_incoming_cmd 是我们定义的管道入口
 void apex_process_incoming_cmd(const char *cipher_text, size_t data_len);
@@ -135,3 +161,6 @@ const char *apex_state_get_active_msg_id(const char *cmd_key);
  * @param data 返回的业务 JSON 数据 (函数内部会接管内存并在发送后释放)
  */
 esp_err_t apex_cmd_finish(const char *msg_id, int code, cJSON *data);
+
+char *build_function_param_desc_json(const function_param_desc_t *params, int count,
+                                     char *out_buf, int buf_size);

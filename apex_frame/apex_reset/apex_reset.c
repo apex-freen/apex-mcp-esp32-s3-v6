@@ -13,7 +13,10 @@
 
 #define FUNCTION_KEY "reSet"
 
-#define PARAM_SCHEMA "{}"
+static const function_param_desc_t function_params[] =
+    {
+        // 数组为空 → 输出 {}
+};
 
 // 重置任务：先给网络栈时间发送响应，再写入出厂默认配置，最后重启
 static void apex_reset_task(void *arg)
@@ -71,11 +74,17 @@ static int apex_reset_handler(cJSON *params, const char *msg_id, cJSON **res_dat
 // ============================================================================
 esp_err_t apex_reset_init(void)
 {
+    static char function_params_json_buf[16];
+    int count = sizeof(function_params) / sizeof(function_params[0]);
+
+    // 调用函数，把 JSON 写进 buffer
+    build_function_param_desc_json(function_params, count,
+                                   function_params_json_buf, sizeof(function_params_json_buf));
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "系统重置",
         .function_desc = "系统重置为默认状态，重要操作需谨慎",
-        .function_params = PARAM_SCHEMA, // 自动引用上面拼接好的 Schema 常量
+        .function_params = function_params_json_buf,
         .role = "admin",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // 强制属性：重置为最高优先级，无视系统忙碌状态
