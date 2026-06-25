@@ -395,10 +395,11 @@ static const char *FUNCTION_KEY = "sync_add";
 #define KEY_PARAM_A "add"
 #define KEY_PARAM_B "adder"
 static const function_param_desc_t function_params[] = {
-    {.key = KEY_PARAM_A, .type = "int", .has_min = 1, .min_val = 0,
+    {.key = KEY_PARAM_A, .type = "int", .description = "第一个加数",
+     .has_min = 1, .min_val = 0,
      .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
      .unit = "celsius", .has_default = 1, .default_val = 50},
-    {.key = KEY_PARAM_B, .type = "int",
+    {.key = KEY_PARAM_B, .type = "int", .description = "第二个加数",
      .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},
 };
 
@@ -491,10 +492,11 @@ static const char *FUNCTION_KEY = "async_add";
 #define KEY_PARAM_A "add"
 #define KEY_PARAM_B "adder"
 static const function_param_desc_t function_params[] = {
-    {.key = KEY_PARAM_A, .type = "int", .has_min = 1, .min_val = 0,
+    {.key = KEY_PARAM_A, .type = "int", .description = "第一个加数",
+     .has_min = 1, .min_val = 0,
      .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
      .unit = "celsius", .has_default = 1, .default_val = 50},
-    {.key = KEY_PARAM_B, .type = "int",
+    {.key = KEY_PARAM_B, .type = "int", .description = "第二个加数",
      .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},
 };
 

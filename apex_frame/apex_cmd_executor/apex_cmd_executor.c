@@ -360,40 +360,40 @@ cJSON *apex_cmd_getinfo(void)
     cJSON_AddStringToObject(data_obj, "dev_name", g_apex_config.device.device_name); // 假设配置里有
     cJSON_AddStringToObject(data_obj, "dev_pwd", g_apex_config.device.device_pwd);
 
-    // --- 2. 构造功能清单数组 (funs) ---
-    cJSON *funs_array = cJSON_CreateArray();
+    // --- 2. 构造工具列表 (tools) —— MCP 标准格式 ---
+    cJSON *tools_array = cJSON_CreateArray();
     for (int i = 0; i < s_cmd_count; i++)
     {
         cJSON *item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "function_key", s_cmd_table[i].cmd_key);
-        cJSON_AddStringToObject(item, "function_name", s_cmd_table[i].function_name);
-        cJSON_AddStringToObject(item, "function_desc", s_cmd_table[i].function_desc);
+        cJSON_AddStringToObject(item, "name", s_cmd_table[i].cmd_key);
+        cJSON_AddStringToObject(item, "description", s_cmd_table[i].function_desc);
+        cJSON_AddStringToObject(item, "function_name", s_cmd_table[i].function_name); // 保留中文展示名
 
-        // 处理参数 Schema
+        // 处理 inputSchema
         if (s_cmd_table[i].function_params && strlen(s_cmd_table[i].function_params) > 0)
         {
             cJSON *params_def = cJSON_Parse(s_cmd_table[i].function_params);
             if (params_def)
             {
-                cJSON_AddItemToObject(item, "function_params", params_def);
+                cJSON_AddItemToObject(item, "inputSchema", params_def);
             }
             else
             {
-                cJSON_AddStringToObject(item, "function_params", s_cmd_table[i].function_params);
+                cJSON_AddStringToObject(item, "inputSchema", s_cmd_table[i].function_params);
             }
         }
         else
         {
-            cJSON_AddNullToObject(item, "function_params");
+            cJSON_AddNullToObject(item, "inputSchema");
         }
 
         cJSON_AddStringToObject(item, "role", s_cmd_table[i].role);
         cJSON_AddStringToObject(item, "version", s_cmd_table[i].version);
-        cJSON_AddItemToArray(funs_array, item);
+        cJSON_AddItemToArray(tools_array, item);
     }
 
-    // --- 3. 将数组挂载到 data 对象中 ---
-    cJSON_AddItemToObject(data_obj, "funs", funs_array);
+    // --- 3. 将工具数组挂载到 data 对象中 ---
+    cJSON_AddItemToObject(data_obj, "tools", tools_array);
 
     return data_obj;
 }
@@ -759,6 +759,19 @@ esp_err_t apex_crypto_init_with_pwd(const char *pwd)
     return payload_crypto_init(final_psk);
 }
 
+/**
+ * @brief 将 function_param_desc_t 数组构建为 JSON Schema 格式 (Draft-07)
+ *
+ * 输出格式 (符合 JSON Schema 规范):
+ * {
+ *   "type": "object",
+ *   "properties": {
+ *     "add":   {"type": "integer", "description": "第一个加数", "minimum": 0, "maximum": 100, "default": 50},
+ *     "mode":  {"type": "string", "enum": ["cool","heat"], "description": "风扇模式"}
+ *   },
+ *   "required": ["mode"]
+ * }
+ */
 char *build_function_param_desc_json(const function_param_desc_t *params, int count,
                                      char *out_buf, int buf_size)
 {
@@ -769,7 +782,6 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
         return NULL;
     }
 
-    // 根对象
     cJSON *root = cJSON_CreateObject();
     if (!root)
     {
@@ -777,65 +789,88 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
         return NULL;
     }
 
+    // 根: "type": "object"
+    cJSON_AddStringToObject(root, "type", "object");
+
+    cJSON *properties = cJSON_CreateObject();
+    cJSON *required = cJSON_CreateArray();
+    bool has_required = false;
+
     for (int i = 0; i < count; i++)
     {
         const function_param_desc_t *p = &params[i];
 
-        // 每个参数的子对象
         cJSON *obj = cJSON_CreateObject();
         if (!obj)
         {
+            cJSON_Delete(properties);
+            cJSON_Delete(required);
             cJSON_Delete(root);
             out_buf[0] = '\0';
             return NULL;
         }
 
-        // 1. type（必须有）
-        cJSON_AddStringToObject(obj, "type", p->type);
+        // 1. type 映射: "int"→"integer", "float"→"number", "bool"→"boolean"
+        if (strcmp(p->type, "int") == 0)
+            cJSON_AddStringToObject(obj, "type", "integer");
+        else if (strcmp(p->type, "float") == 0)
+            cJSON_AddStringToObject(obj, "type", "number");
+        else if (strcmp(p->type, "bool") == 0)
+            cJSON_AddStringToObject(obj, "type", "boolean");
+        else
+            cJSON_AddStringToObject(obj, "type", p->type); // "string" 等原样
 
-        // 2. 枚举值
+        // 2. description（可选）
+        if (p->description && strlen(p->description) > 0)
+            cJSON_AddStringToObject(obj, "description", p->description);
+
+        // 3. 枚举值: "values" → "enum"
         if (p->enum_count > 0 && p->enum_vals)
         {
             cJSON *arr = cJSON_CreateArray();
             for (int j = 0; j < p->enum_count; j++)
-            {
                 cJSON_AddItemToArray(arr, cJSON_CreateString(p->enum_vals[j]));
-            }
-            cJSON_AddItemToObject(obj, "values", arr);
+            cJSON_AddItemToObject(obj, "enum", arr);
         }
 
-        // 3. 数值范围
+        // 4. 数值范围
         if (strcmp(p->type, "int") == 0 || strcmp(p->type, "float") == 0)
         {
             if (p->has_min)
-                cJSON_AddNumberToObject(obj, "min", p->min_val);
+                cJSON_AddNumberToObject(obj, "minimum", p->min_val);
             if (p->has_max)
-                cJSON_AddNumberToObject(obj, "max", p->max_val);
+                cJSON_AddNumberToObject(obj, "maximum", p->max_val);
             if (p->has_step)
-                cJSON_AddNumberToObject(obj, "step", p->step_val);
+                cJSON_AddNumberToObject(obj, "step", p->step_val); // 非标准扩展，AI 端可用
             if (p->unit)
-                cJSON_AddStringToObject(obj, "unit", p->unit);
+                cJSON_AddStringToObject(obj, "unit", p->unit); // 非标准扩展，AI 端可用
         }
 
-        // 4. 默认值
+        // 5. 默认值
         if (p->has_default)
         {
             if (strcmp(p->type, "string") == 0 && p->enum_count > 0)
-            {
                 cJSON_AddStringToObject(obj, "default", p->enum_vals[p->default_val]);
-            }
             else if (strcmp(p->type, "bool") == 0)
-            {
                 cJSON_AddBoolToObject(obj, "default", p->default_val ? cJSON_True : cJSON_False);
-            }
             else
-            {
                 cJSON_AddNumberToObject(obj, "default", p->default_val);
-            }
+        }
+        else
+        {
+            // 无默认值 = 必填参数
+            cJSON_AddItemToArray(required, cJSON_CreateString(p->key));
+            has_required = true;
         }
 
-        cJSON_AddItemToObject(root, p->key, obj);
+        cJSON_AddItemToObject(properties, p->key, obj);
     }
+
+    cJSON_AddItemToObject(root, "properties", properties);
+    if (has_required)
+        cJSON_AddItemToObject(root, "required", required);
+    else
+        cJSON_Delete(required);
 
     // 输出到缓冲区
     char *json_str = cJSON_PrintUnformatted(root);
@@ -846,7 +881,6 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
         return NULL;
     }
 
-    // 截断到缓冲区大小
     strncpy(out_buf, json_str, buf_size - 1);
     out_buf[buf_size - 1] = '\0';
 

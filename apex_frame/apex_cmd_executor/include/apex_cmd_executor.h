@@ -82,7 +82,7 @@ typedef struct
     const char *cmd_key;         // 匹配标识 (如 "led_ctrl")
     const char *function_name;   // 友好展示名称 (如 "灯光控制")
     const char *function_desc;   // 功能详细介绍
-    const char *function_params; // 参数定义 (JSON 字符串，描述名称与类型)
+    const char *function_params; // 参数定义 (JSON Schema 格式，由 build_function_param_desc_json 生成)
     const char *role;            // 权限角色 (如 "admin", "user", "guest")
     const char *version;         // 版本号 (如 "1.0.2")
     apex_cmd_flag_t flags;       // <--- 新增：指令并发属性
@@ -104,8 +104,9 @@ typedef struct
 // 描述"一个参数的元信息"
 typedef struct
 {
-    const char *key;  // 参数名: "add", "adder"...
-    const char *type; // 类型: "int", "float", "bool", "string"
+    const char *key;         // 参数名: "add", "adder"...
+    const char *type;        // 类型: "int", "float", "bool", "string"
+    const char *description; // 参数说明 (可选): "第一个加数"、"风扇模式 cool/heat/fan"
 
     // 数值范围约束（数值类型用）
     int has_min; // 是否有最小值
@@ -122,7 +123,7 @@ typedef struct
     // 单位（可选）
     const char *unit;
 
-    // 默认值
+    // 默认值（has_default=0 表示必填，自动加入 required 数组）
     int has_default;
     int default_val;
 } function_param_desc_t;

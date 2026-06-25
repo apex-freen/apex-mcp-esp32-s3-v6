@@ -49,6 +49,7 @@ static const function_param_desc_t function_params[] =
     {
         {.key = KEY_PARAM_A,
          .type = "int",
+         .description = "第一个加数",
          .has_min = 1,
          .min_val = 0,
          .has_max = 1,
@@ -61,6 +62,7 @@ static const function_param_desc_t function_params[] =
         {
             .key = KEY_PARAM_B,
             .type = "int",
+            .description = "第二个加数",
             .has_min = 1,
             .min_val = 0,
             .has_max = 1,
