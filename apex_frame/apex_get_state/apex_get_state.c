@@ -88,7 +88,7 @@ static int apex_get_state_handler(cJSON *params, const char *msg_id, cJSON **res
 // ============================================================================
 esp_err_t apex_get_state_init(void)
 {
-    static char function_params_json_buf[16];
+    static char function_params_json_buf[64];
     int count = sizeof(function_params) / sizeof(function_params[0]);
 
     // 调用函数，把 JSON 写进 buffer
@@ -97,7 +97,7 @@ esp_err_t apex_get_state_init(void)
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "指令状态",
-        .function_desc = "获取设备当前指令状态",
+        .function_desc = "获取设备当前指令状态（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
         .version = "1.0.0",

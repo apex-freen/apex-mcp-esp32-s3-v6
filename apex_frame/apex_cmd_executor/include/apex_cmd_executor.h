@@ -113,14 +113,14 @@ typedef struct
     int min_val;
     int has_max;
     int max_val;
-    int has_step;
-    int step_val;
+    int has_multipleOf; // 步进（输出为 JSON Schema 的 multipleOf）
+    int multipleOf_val;
 
     // 枚举约束（string 类型用）
     const char **enum_vals; // 可选值数组: ["cool", "heat"]...
     int enum_count;         // 枚举值个数
 
-    // 单位（可选）
+    // 单位（可选，构建时自动合并到 description，不输出为独立字段）
     const char *unit;
 
     // 默认值（has_default=0 表示必填，自动加入 required 数组）

@@ -379,7 +379,14 @@ cJSON *apex_cmd_getinfo(void)
             }
             else
             {
-                cJSON_AddStringToObject(item, "inputSchema", s_cmd_table[i].function_params);
+                // 解析失败（如 buffer 过小导致截断），输出最小合法 schema
+                ESP_LOGW(TAG, "function_params JSON 解析失败 for [%s], 使用默认空 schema",
+                         s_cmd_table[i].cmd_key);
+                cJSON *empty_schema = cJSON_CreateObject();
+                cJSON_AddStringToObject(empty_schema, "type", "object");
+                cJSON *empty_props = cJSON_CreateObject();
+                cJSON_AddItemToObject(empty_schema, "properties", empty_props);
+                cJSON_AddItemToObject(item, "inputSchema", empty_schema);
             }
         }
         else
@@ -477,8 +484,8 @@ esp_err_t apex_cmd_executor_init(void)
     apex_cmd_entry_t info_cmd = {
         .cmd_key = "getInfo",
         .function_name = "获取设备能力集",
-        .function_desc = "返回设备当前支持的所有指令、参数结构及版本信息",
-        .function_params = "{}", // 无参
+        .function_desc = "返回设备当前支持的所有指令、参数结构及版本信息（无需参数）",
+        .function_params = "{\"type\":\"object\",\"properties\":{}}", // 无参
         .role = "user",
         .version = "1.0.0",
         .handler = apex_cmd_getinfo_handler};
@@ -766,7 +773,7 @@ esp_err_t apex_crypto_init_with_pwd(const char *pwd)
  * {
  *   "type": "object",
  *   "properties": {
- *     "add":   {"type": "integer", "description": "第一个加数", "minimum": 0, "maximum": 100, "default": 50},
+ *     "add":   {"type": "integer", "description": "第一个加数（单位：celsius）", "minimum": 0, "maximum": 100, "default": 50},
  *     "mode":  {"type": "string", "enum": ["cool","heat"], "description": "风扇模式"}
  *   },
  *   "required": ["mode"]
@@ -791,6 +798,29 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
 
     // 根: "type": "object"
     cJSON_AddStringToObject(root, "type", "object");
+
+    // 无参 Tool：直接输出 {"type":"object","properties":{}}
+    if (count == 0)
+    {
+        cJSON *empty_props = cJSON_CreateObject();
+        cJSON_AddItemToObject(root, "properties", empty_props);
+
+        char *json_str = cJSON_PrintUnformatted(root);
+        if (!json_str)
+        {
+            cJSON_Delete(root);
+            out_buf[0] = '\0';
+            return NULL;
+        }
+        strncpy(out_buf, json_str, buf_size - 1);
+        out_buf[buf_size - 1] = '\0';
+        free(json_str);
+        cJSON_Delete(root);
+        // 警告：buffer 太小会截断
+        if (strlen(out_buf) > (size_t)(buf_size - 2))
+            ESP_LOGW(TAG, "build_function_param_desc_json: buffer too small (%d bytes)", buf_size);
+        return out_buf;
+    }
 
     cJSON *properties = cJSON_CreateObject();
     cJSON *required = cJSON_CreateArray();
@@ -820,8 +850,17 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
         else
             cJSON_AddStringToObject(obj, "type", p->type); // "string" 等原样
 
-        // 2. description（可选）
-        if (p->description && strlen(p->description) > 0)
+        // 2. description（合并 unit 信息，unit 非 JSON Schema 标准字段）
+        if (p->unit && p->unit[0] != '\0')
+        {
+            char desc_buf[128];
+            if (p->description && p->description[0] != '\0')
+                snprintf(desc_buf, sizeof(desc_buf), "%s（单位：%s）", p->description, p->unit);
+            else
+                snprintf(desc_buf, sizeof(desc_buf), "单位：%s", p->unit);
+            cJSON_AddStringToObject(obj, "description", desc_buf);
+        }
+        else if (p->description && p->description[0] != '\0')
             cJSON_AddStringToObject(obj, "description", p->description);
 
         // 3. 枚举值: "values" → "enum"
@@ -840,10 +879,8 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
                 cJSON_AddNumberToObject(obj, "minimum", p->min_val);
             if (p->has_max)
                 cJSON_AddNumberToObject(obj, "maximum", p->max_val);
-            if (p->has_step)
-                cJSON_AddNumberToObject(obj, "step", p->step_val); // 非标准扩展，AI 端可用
-            if (p->unit)
-                cJSON_AddStringToObject(obj, "unit", p->unit); // 非标准扩展，AI 端可用
+            if (p->has_multipleOf)
+                cJSON_AddNumberToObject(obj, "multipleOf", p->multipleOf_val);
         }
 
         // 5. 默认值

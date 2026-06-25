@@ -371,6 +371,29 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 | `apex_state_manager_t` | 设备状态管理器，全局跟踪设备运行状态、当前执行指令、槽位占用情况 |
 | `s_cmd_table` | 全局指令注册表，存储所有已注册的业务指令，为指令匹配提供数据源 |
 
+#### 参数描述结构体 `function_param_desc_t`
+
+定义每个指令参数的元信息，由 `build_function_param_desc_json()` 转换为 **JSON Schema Draft-07** 格式（兼容 MCP `inputSchema`）：
+
+```
+源码定义                    输出 JSON Schema
+────────────────────────────────────────────────
+.key   = "add"          →  "add": { ... }
+.type   = "int"          →  "type": "integer"
+.type   = "float"        →  "type": "number"
+.type   = "bool"         →  "type": "boolean"
+.has_min / .min_val      →  "minimum": 0
+.has_max / .max_val      →  "maximum": 100
+.has_multipleOf / .multipleOf_val →  "multipleOf": 1
+.enum_vals               →  "enum": ["cool","heat"]
+.description             →  "description": "..."
+.unit                    →  合并到 description  (不输出独立字段)
+                             例: "第一个加数（单位：celsius）"
+.has_default=0           →  列入 "required" 数组 (必填)
+```
+
+> `.unit` 字段保留在源码中作为结构化数据，构建 JSON 时自动拼接到 `description` 后面（`"xxx（单位：yyy）"`），不输出独立的 `"unit"` 键，确保输出为纯 JSON Schema 标准格式。
+
 ---
 
 ## 开发示例
@@ -397,7 +420,7 @@ static const char *FUNCTION_KEY = "sync_add";
 static const function_param_desc_t function_params[] = {
     {.key = KEY_PARAM_A, .type = "int", .description = "第一个加数",
      .has_min = 1, .min_val = 0,
-     .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
+     .has_max = 1, .max_val = 100, .has_multipleOf = 1, .multipleOf_val = 1,
      .unit = "celsius", .has_default = 1, .default_val = 50},
     {.key = KEY_PARAM_B, .type = "int", .description = "第二个加数",
      .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},
@@ -494,7 +517,7 @@ static const char *FUNCTION_KEY = "async_add";
 static const function_param_desc_t function_params[] = {
     {.key = KEY_PARAM_A, .type = "int", .description = "第一个加数",
      .has_min = 1, .min_val = 0,
-     .has_max = 1, .max_val = 100, .has_step = 1, .step_val = 1,
+     .has_max = 1, .max_val = 100, .has_multipleOf = 1, .multipleOf_val = 1,
      .unit = "celsius", .has_default = 1, .default_val = 50},
     {.key = KEY_PARAM_B, .type = "int", .description = "第二个加数",
      .has_min = 1, .min_val = 0, .has_max = 1, .max_val = 200},

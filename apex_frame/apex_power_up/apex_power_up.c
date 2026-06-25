@@ -39,7 +39,7 @@ static int apex_power_up_handler(cJSON *params, const char *msg_id, cJSON **res_
 // ============================================================================
 esp_err_t apex_power_up_init(void)
 {
-    static char function_params_json_buf[16];
+    static char function_params_json_buf[64];
     int count = sizeof(function_params) / sizeof(function_params[0]);
 
     // 调用函数，把 JSON 写进 buffer
@@ -48,7 +48,7 @@ esp_err_t apex_power_up_init(void)
     apex_cmd_entry_t entry = {
         .cmd_key = FUNCTION_KEY,
         .function_name = "系统开机",
-        .function_desc = "系统开机功能",
+        .function_desc = "系统开机功能（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
         .version = "1.0.0",
