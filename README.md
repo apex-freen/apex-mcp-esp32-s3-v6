@@ -810,9 +810,7 @@ APEX 框架设计为**芯片无关、平台无关**的通用架构：
 |----------|-----------|
 | ESP32-S3 + IDF v6.X | ESP32-C3 / C6 / H2 / P4 等全系列芯片 |
 | WiFi / MQTT | 增加 BLE、Zigbee、Thread、LoRa 等协议支持 |
-| JSON Schema 自描述 | 完整的 MCP `inputSchema` 兼容 |
-| 故障分级 + 看门狗 | 工业级可靠性 |
-| 豆包 App 对接 | 千问、元宝、ChatGPT、Claude 等更多 AI 平台 |
+| MCP 协议对接 | 千问、元宝、ChatGPT、Claude 等更多 AI 平台通过 MCP 协议接入 |
 
 ### 标准开发流程
 
@@ -827,6 +825,8 @@ APEX 框架设计为**芯片无关、平台无关**的通用架构：
 ---
 
 ## 已落地能力
+
+✅ **MCP 智能体控制** — 支持标准 MCP (Model Context Protocol) 协议，可对接各类兼容 MCP 的智能体（如豆包 App、Claude Desktop 等），实现设备远程控制
 
 ✅ **豆包 App 智能体控制** — 已完整实现对接，用户可通过豆包 App 直接控制 APEX 设备
 
