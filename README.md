@@ -1,10 +1,17 @@
 # APEX 通用智能体设备开发框架
 
-> **本项目：`apex-esp32-s3-v6`** —— APEX 框架的 ESP32-S3 + IDF v6.X 参考实现
+> **`apex-esp32-s3-v6`** — 同时支持 **MQTT 原生协议** 与 **标准化 MCP (JSON-RPC 2.0)** 的智能体设备框架
+> 配合中控平台 (agent-plat)，将 ESP32-S3 设备无缝包装为 MCP Server
+> 只要支持 MCP 协议，一键接入，完成指令下发、中控权限校验与指令安全校验
+>
+> **云端智能体**：豆包 / 千问 / 元宝 / Kimi / 文心一言 / DeepSeek / ChatGPT / Claude / Gemini
+> **本地客户端**：Trae / Cursor / Windsurf / 龙虾 / VS Code + Copilot / Claude Desktop
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.X-green.svg)](https://docs.espressif.com/projects/esp-idf/)
 [![Platform](https://img.shields.io/badge/Platform-ESP32--S3-orange.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
+[![MCP](https://img.shields.io/badge/MCP-Standard-purple.svg)](https://modelcontextprotocol.io/)
+[![Protocol](https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-blue.svg)]()
 
 ---
 
@@ -206,8 +213,6 @@ apex-esp32-s3-v6/
 │   └── apex_get_state/                 # 获取设备当前状态
 │
 ├── common/                             # 通用基础组件（基础层）
-│   ├── cjson/                          # JSON 解析与封装库
-│   ├── crypto/                         # 数据加密解密模块
 │   └── utils/                          # 通用工具函数库
 │
 ├── components/                         # 业务示例组件（应用层）
@@ -226,6 +231,30 @@ apex-esp32-s3-v6/
 | `common/` | **基础层** | 全局通用工具与依赖库，为业务模块提供基础能力支撑 |
 | `components/` | **应用层** | 官方标准开发示例，指导开发者快速开发自定义业务模块 |
 | `main/` | **入口层** | 程序启动入口，负责模块初始化顺序管理 |
+
+## MCP 标准化协议架构
+
+`apex-esp32-s3-v6` 在设计之初就将 **MCP (Model Context Protocol)** 作为一等公民。
+
+设备端通过高效的 **MQTT** 长连接与中控通信，中控平台 (agent-plat) 将其包装为标准的 **MCP Server**，对外提供 **Streamable HTTP** 端点。这意味着 **每一台 ESP32-S3 设备都是一台隐形的 MCP Server**，可以被任何 MCP 兼容的 AI 客户端直接发现和调用。
+
+```
+AI App (MCP Client)                  中控平台 (MCP Server)                设备端 (MQTT)
+─────── Streamable HTTP ────────       ──── MQTT ────
+tools/list ──────────→  从缓存返回 tools[]   ←─── getInfo 时上报 tools
+tools/call ──────────→  转 {function_key, params}  →  执行 → 加密 response
+                                           JSON-RPC 2.0 Notification  ←  apex_cmd_send_notify
+```
+
+| 概念 | MCP 标准 | APEX 实现 |
+|------|---------|----------|
+| 工具发现 | `tools/list` | `getInfo` → `tools` 数组 |
+| 工具调用 | `tools/call` | `{function_key, msg_id, function_params}` → handler |
+| 参数描述 | `inputSchema` (JSON Schema Draft-07) | `build_function_param_desc_json()` 自动生成 |
+| 事件通知 | `notifications` | `apex_cmd_send_notify()` → JSON-RPC 2.0 Notification |
+| 传输层 | Streamable HTTP / stdio | MQTT (设备端) → Streamable HTTP (中控端) |
+
+> **一句话**：你的设备说 MQTT，中控帮你翻译成 MCP，AI App 看到的就是一个标准的 MCP Server。开发者只需写 handler，框架自动完成 Schema 生成、协议适配与故障恢复。
 
 ---
 
@@ -357,13 +386,17 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 └────────┬────────┘
          ▼
 ┌─────────────────┐
+│   重复指令拦截    │ ← 同一 msg_id 在 2 秒窗口内重复到达直接拒绝 (APEX_ERR_DUPLICATE)
+└────────┬────────┘
+         ▼
+┌─────────────────┐
 │    指令解析      │ ← apex_cmd_executor 解析 JSON 指令报文
 │                 │ ← 提取 function_key、msg_id、function_params
 └────────┬────────┘
          ▼
 ┌─────────────────┐
 │   指令匹配查找    │ ← apex_cmd_find_entry 匹配全局指令注册表
-│                 │ ← 无匹配则返回 APEX_ERR_NOT_FOUND
+│                 │ ← 无匹配则返回 APEX_ERR_NOT_FOUND + notify
 └────────┬────────┘
          ▼
 ┌─────────────────┐
@@ -372,8 +405,14 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 └────────┬────────┘
          ▼
 ┌─────────────────┐
+│   熔断降级检查    │ ← 连续失败 5 次自动熔断 5 分钟 (APEX_ERR_DEGRADED)
+│                 │ ← 成功立即清零失败计数
+└────────┬────────┘
+         ▼
+┌─────────────────┐
 │  多模式指令执行   │ ← 调用对应业务 handler 执行逻辑
 │                 │ ← 根据返回值区分：同步 / 异步 / 持久化任务
+│                 │ ← 失败时自动 notify 服务端 (event: command_failed)
 └────────┬────────┘
          ▼
 ┌─────────────────┐
@@ -383,6 +422,16 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 └─────────────────┘
 ```
 
+### 内置防护机制
+
+| 机制 | 触发条件 | 行为 | 通知服务端 |
+|------|---------|------|:---:|
+| **指令去重** | 同一 `msg_id` 2 秒内重复到达 | 返回 `APEX_ERR_DUPLICATE`，不执行 | — |
+| **故障计数** | handler 返回负值错误码 | 累计连续失败次数 | ✅ `command_failed` |
+| **熔断降级** | 连续失败 ≥ 5 次 | 该指令 5 分钟内直接返回 `APEX_ERR_DEGRADED` | ✅ `degraded` |
+| **降级恢复** | 5 分钟到期 | 自动清零失败计数，恢复正常 | — |
+| **看门狗** | handler 执行超过 30 秒 | 设备自动复位（ESP-IDF 原生 IWDT 兜底） | — |
+
 ### 核心数据结构
 
 | 结构体 | 说明 |
@@ -390,6 +439,22 @@ APEX 框架根据 handler 返回值，将指令处理逻辑分为三类：
 | `apex_cmd_entry_t` | 指令条目结构体，存储单条指令的标识、名称、描述、参数规范、权限、运行标识、处理函数等全量配置 |
 | `apex_state_manager_t` | 设备状态管理器，全局跟踪设备运行状态、当前执行指令、槽位占用情况 |
 | `s_cmd_table` | 全局指令注册表，存储所有已注册的业务指令，为指令匹配提供数据源 |
+
+`apex_cmd_entry_t` 完整字段一览：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `cmd_key` | `const char *` | ✅ | 指令标识（如 `"sync_add"`） |
+| `function_name` | `const char *` | ✅ | 中文展示名 |
+| `function_desc` | `const char *` | ✅ | 功能描述（无参时建议备注"无需参数"） |
+| `function_params` | `const char *` | ✅ | JSON Schema 字符串（由 `build_function_param_desc_json()` 生成） |
+| `role` | `const char *` | ✅ | 权限角色：`"admin"` / `"user"` |
+| `version` | `const char *` | ✅ | 版本号 |
+| `flags` | `apex_cmd_flag_t` | ✅ | 并发属性：`PARALLEL` / `EXCLUSIVE` / `FORCE` / `ALWAYS_ALLOWED` |
+| `handler` | `apex_cmd_handler_t` | ✅ | 指令执行函数 |
+| `is_persistent` | `bool` | | 持久化动作标记（需配套 `stop_handler`） |
+| `stop_handler` | `apex_stop_handler_t` | | 停止回调（`is_persistent=true` 时必填） |
+| `notify_handler` | `apex_notify_handler_t` | | 设备事件通知回调（可选），在 handler 中主动调用 `apex_cmd_send_notify()` |
 
 #### 参数描述结构体 `function_param_desc_t`
 
@@ -744,8 +809,9 @@ APEX 框架设计为**芯片无关、平台无关**的通用架构：
 | 当前实现 | 可扩展目标 |
 |----------|-----------|
 | ESP32-S3 + IDF v6.X | ESP32-C3 / C6 / H2 / P4 等全系列芯片 |
-| 消费级物联网芯片 | 工业级 MCU、ARM Cortex-M 系列等 |
-| WiFi 通信 | 增加 BLE、Zigbee、Thread、LoRa 等协议支持 |
+| WiFi / MQTT | 增加 BLE、Zigbee、Thread、LoRa 等协议支持 |
+| JSON Schema 自描述 | 完整的 MCP `inputSchema` 兼容 |
+| 故障分级 + 看门狗 | 工业级可靠性 |
 | 豆包 App 对接 | 千问、元宝、ChatGPT、Claude 等更多 AI 平台 |
 
 ### 标准开发流程
