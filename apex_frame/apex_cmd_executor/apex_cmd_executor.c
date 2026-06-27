@@ -329,9 +329,6 @@ void apex_cmd_executor(const char *json_raw)
     if (json_raw == NULL)
         return;
 
-    // 喂看门狗：每次指令处理重置计时
-    esp_task_wdt_reset();
-
     cJSON *root = cJSON_Parse(json_raw);
     if (!root)
     {

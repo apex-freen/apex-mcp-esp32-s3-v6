@@ -197,7 +197,7 @@ esp_err_t apex_mqtt_publish(const char *topic, const char *payload, int len, int
     {
         return ESP_FAIL;
     }
-    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, payload, len, qos, retain);
+    int msg_id = esp_mqtt_client_enqueue(s_mqtt_client, topic, payload, len, qos, retain, true);
     return msg_id >= 0 ? ESP_OK : ESP_FAIL;
 }
 
