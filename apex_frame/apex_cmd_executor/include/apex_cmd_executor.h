@@ -12,6 +12,8 @@
 #define APEX_ERR_NOT_SUPPORTED -406 // 功能不支持 停止等功能
 #define APEX_ERR_OVERFLOW -502      // 当前可同时运行的指令已满
 #define APEX_ERR_TIMEOUT -503       // 系统指令超时
+#define APEX_ERR_DEGRADED -504      // 指令已降级（连续失败自动熔断）
+#define APEX_ERR_DUPLICATE -505     // 重复指令（短时间内相同指令多次下发）
 
 // 设备指令状态设计
 #include "freertos/FreeRTOS.h"
@@ -77,6 +79,21 @@ extern apex_state_manager_t g_apex_state;
 typedef int (*apex_cmd_handler_t)(cJSON *params, const char *msg_id, cJSON **res_data);
 typedef int (*apex_stop_handler_t)(cJSON *params, const char *msg_id, cJSON **res_data);
 
+/**
+ * @brief 设备主动通知回调（可选）
+ *
+ * 当模块需要在指令执行过程中主动向服务端推送事件通知时实现此回调。
+ * 由业务 handler 内部主动调用 apex_cmd_send_notify() 触发，
+ * 消息通过 MQTT notice topic 发送到服务端。
+ *
+ * 示例：设备复位、电机启动、传感器超阈值等设备端事件。
+ *
+ * @param func_key  触发通知的指令标识
+ * @param event     事件类型 (如 "reset", "motor_started", "temp_alarm")
+ * @param data      事件附带数据 (cJSON 对象，函数内部接管并销毁)
+ */
+typedef void (*apex_notify_handler_t)(const char *func_key, const char *event, cJSON *data);
+
 typedef struct
 {
     const char *cmd_key;         // 匹配标识 (如 "led_ctrl")
@@ -99,6 +116,12 @@ typedef struct
      * 框架在收到 apex_stop 指令时会自动调用此函数。
      */
     apex_stop_handler_t stop_handler;
+    /**
+     * @brief 设备通知回调（可选）
+     * 当模块需要主动向服务端推送设备事件时设置此字段。
+     * 业务 handler 内部调用 apex_cmd_send_notify() 触发，消息通过 MQTT notice topic 发送。
+     */
+    apex_notify_handler_t notify_handler;
 } apex_cmd_entry_t;
 
 // 描述"一个参数的元信息"
@@ -142,6 +165,19 @@ void apex_cmd_executor(const char *json_raw);
 esp_err_t apex_cmd_executor_init(void);
 
 void apex_cmd_send_response(const char *func_key, const char *msg_id, int status_code, cJSON *res_data);
+
+/**
+ * @brief 设备主动通知：推送事件到服务端
+ *
+ * 模块 handler 内部调用此函数，将设备事件通过 MQTT notice topic 发送到服务端。
+ * 消息格式: {"function_key":"...","event":"...","data":{...}}
+ * 自动加密后发布。
+ *
+ * @param func_key  触发通知的指令标识
+ * @param event     事件类型 (如 "reset", "motor_started")
+ * @param data      事件附带数据 (cJSON 对象，函数内部接管并销毁)
+ */
+void apex_cmd_send_notify(const char *func_key, const char *event, cJSON *data);
 
 void apex_cmd_send_async_done(const char *msg_id, const char *func_key, int code, cJSON *result_obj);
 

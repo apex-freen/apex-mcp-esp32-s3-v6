@@ -59,6 +59,12 @@ static int apex_reset_handler(cJSON *params, const char *msg_id, cJSON **res_dat
     }
 
     // 3. 创建异步任务：先发送成功响应，再写入出厂配置并重启
+    // 同时通知服务端：设备即将重置
+    cJSON *notify_data = cJSON_CreateObject();
+    cJSON_AddStringToObject(notify_data, "action", "factory_reset");
+    cJSON_AddNumberToObject(notify_data, "delay_ms", 1500);
+    apex_cmd_send_notify(FUNCTION_KEY, "reset", notify_data);
+
     BaseType_t ret = xTaskCreate(apex_reset_task, "reset_task", 2048, NULL, 5, NULL);
     if (ret != pdPASS)
     {

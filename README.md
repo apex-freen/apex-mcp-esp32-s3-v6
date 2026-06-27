@@ -192,16 +192,18 @@ apex-esp32-s3-v6/
 │
 ├── apex_frame/                         # 核心功能模块（核心层）
 │   ├── apex_cmd_executor/              # 全局命令执行引擎 — 系统核心调度中心
-│   │   ├── include/
-│   │   │   └── apex_cmd_executor.h
-│   │   ├── apex_cmd_executor.c
-│   │   └── CMakeLists.txt
-│   ├── apex_wifi_mgr/                  # WiFi 管理模块 — AP/STA 双模式自适应
-│   ├── apex_mqtt/                      # MQTT 通信模块 — 设备与云端数据交互
-│   ├── apex_ota_update/                # OTA 远程升级模块 — 固件远程更新
-│   ├── apex_power/                     # 电源管理模块 — 开机、关机、电源状态管控
-│   ├── apex_reset/                     # 设备重置、重启管理模块
-│   └── apex_web_server/                # 嵌入式 Web 服务器 — 默认 http://192.168.4.1
+│   ├── apex_core/                      # 框架总入口 & 事件总线 & Watchdog
+│   ├── apex_event/                     # 全局事件循环
+│   ├── apex_config/                    # 系统配置管理 (NVS)
+│   ├── apex_network/                   # 网络管理 — AP/STA 双模式
+│   ├── apex_mqtt/                      # MQTT 通信 — 三通道 (command/response/notify)
+│   ├── apex_crypto/                    # 数据加解密 (AES-256)
+│   ├── apex_webserver/                 # 嵌入式 Web 服务器
+│   ├── apex_ota_update/                # OTA 远程固件升级
+│   ├── apex_power_down/ / apex_power_up/  # 电源管理
+│   ├── apex_reset/ / apex_restart/     # 设备重置 / 重启
+│   ├── apex_stop/                      # 强制停止持续动作
+│   └── apex_get_state/                 # 获取设备当前状态
 │
 ├── common/                             # 通用基础组件（基础层）
 │   ├── cjson/                          # JSON 解析与封装库
@@ -210,7 +212,8 @@ apex-esp32-s3-v6/
 │
 ├── components/                         # 业务示例组件（应用层）
 │   ├── sync_add/                       # 同步指令开发示例
-│   └── async_add/                      # 异步指令开发示例
+│   ├── async_add/                      # 异步指令开发示例
+│   └── apex_notify/                    # 设备事件通知示例
 │
 └── build/                              # 编译输出目录
 ```
@@ -235,9 +238,26 @@ apex-esp32-s3-v6/
 | | • STA 断网离线 → 1 分钟后自动开启 AP+STA 双模，支持本地配网 |
 | **Web 本地服务** | 内置 HTTP 网页服务，支持本地 IP 访问设备配置与管理 |
 | **MQTT 远程通信** | 依托 MQTT 协议实现设备与云端长连接，支持指令下发、状态上报 |
+| **设备事件通知** | 设备端主动推送事件到服务端（JSON-RPC 2.0 Notification），覆盖报警/状态变更/任务完成 |
 | **OTA 远程升级** | 支持无拆机远程固件升级，实现设备在线迭代 |
 | **设备电源管控** | 支持开机、关机、重启、状态复位等设备基础管控能力 |
 | **事件驱动调度** | 全业务基于事件驱动机制运行，状态流转、指令调度、任务执行解耦高效 |
+
+### MQTT 三通道通信
+
+设备与服务端之间通过 MQTT 维持三条独立 Topic，分别承载不同的通信语义：
+
+| 通道 | Topic 模式 | 方向 | 语义 | 协议格式 |
+|------|-----------|------|------|----------|
+| **Command** | `apex/{device_id}/command` | 服务端 → 设备 | 远程指令下发 | JSON |
+| **Response** | `apex/{device_id}/response` | 设备 → 服务端 | 指令执行结果的**同步响应** | JSON（加密） |
+| **Notify** | `apex/{device_id}/notify` | 设备 → 服务端 | 设备端**主动事件通知** | JSON-RPC 2.0 Notification（加密） |
+
+> Command 和 Response 构成请求-响应对（一问一答）；Notify 是设备独立触发的单向推送（无回复），适合报警、状态变更等场景。
+
+### Notify 使用示例
+
+见 [components/apex_notify/](components/apex_notify/) — 演示如何通过 `apex_cmd_send_notify()` 推送 JSON-RPC 2.0 通知。
 
 ---
 

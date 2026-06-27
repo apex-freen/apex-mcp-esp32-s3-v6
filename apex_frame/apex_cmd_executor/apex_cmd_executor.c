@@ -8,6 +8,7 @@
 #include "psa/crypto.h"
 #include "apex_mqtt.h"
 #include "apex_crypto.h"
+#include "esp_task_wdt.h"
 #include "apex_get_state.h"
 #include "apex_ota_update.h"
 #include "apex_stop.h"
@@ -18,6 +19,73 @@
 
 static apex_cmd_entry_t s_cmd_table[30]; // 预留30个功能位
 static int s_cmd_count = 0;
+
+// 故障分级：失败计数 & 熔断降级 & 重复拦截
+#define FAULT_MAX_FAILURES 5             // 连续失败次数阈值
+#define FAULT_DEGRADE_MS (5 * 60 * 1000) // 降级恢复时间 (5分钟)
+#define DEDUP_WINDOW_MS 2000             // 重复指令拦截窗口 (2秒)
+#define DEDUP_CACHE_SIZE 16              // 最近 N 条指令缓存
+
+typedef struct
+{
+    char cmd_key[32];
+    int fail_count;
+    TickType_t degraded_until; // 0=正常, >0=降级到期 tick
+} fault_tracker_t;
+
+static fault_tracker_t s_fault_trackers[30];
+
+// 重复指令拦截缓存
+typedef struct
+{
+    char msg_id[64];
+    TickType_t received_at; // 收到时刻 (tick)
+} dedup_entry_t;
+
+static dedup_entry_t s_dedup_cache[DEDUP_CACHE_SIZE];
+static int s_dedup_index = 0;
+
+static bool dedup_check_and_record(const char *msg_id)
+{
+    if (!msg_id || msg_id[0] == '\0')
+        return false; // 无 msg_id 不过滤
+
+    TickType_t now = xTaskGetTickCount();
+
+    for (int i = 0; i < DEDUP_CACHE_SIZE; i++)
+    {
+        if (s_dedup_cache[i].msg_id[0] == '\0')
+            continue;
+        if (strcmp(s_dedup_cache[i].msg_id, msg_id) == 0)
+        {
+            if ((now - s_dedup_cache[i].received_at) * portTICK_PERIOD_MS < DEDUP_WINDOW_MS)
+                return true; // 命中：重复
+            break;           // 命中但超时：覆写
+        }
+    }
+
+    // 缓存当前 msg_id（环形写入）
+    int idx = s_dedup_index % DEDUP_CACHE_SIZE;
+    strncpy(s_dedup_cache[idx].msg_id, msg_id, sizeof(s_dedup_cache[idx].msg_id) - 1);
+    s_dedup_cache[idx].received_at = now;
+    s_dedup_index++;
+    return false;
+}
+
+static fault_tracker_t *fault_tracker_get(const char *cmd_key)
+{
+    if (!cmd_key)
+        return NULL;
+    for (int i = 0; i < s_cmd_count; i++)
+    {
+        if (strcmp(s_fault_trackers[i].cmd_key, cmd_key) == 0)
+            return &s_fault_trackers[i];
+    }
+    // 新条目
+    strncpy(s_fault_trackers[s_cmd_count].cmd_key, cmd_key, sizeof(s_fault_trackers[0].cmd_key) - 1);
+    return &s_fault_trackers[s_cmd_count++];
+}
+
 // 设备指令状态设计
 apex_state_manager_t g_apex_state;
 
@@ -48,6 +116,10 @@ const char *apex_err_to_msg(int code)
         return "too many active commands";
     case APEX_ERR_TIMEOUT:
         return "system command timeout";
+    case APEX_ERR_DEGRADED:
+        return "command degraded due to consecutive failures";
+    case APEX_ERR_DUPLICATE:
+        return "duplicate command, ignored within dedup window";
     default:
         return (code < 0) ? "unknown error" : "success";
     }
@@ -191,6 +263,64 @@ void apex_cmd_send_response(const char *func_key, const char *msg_id, int status
 }
 
 /**
+ * @brief 设备主动通知：按 JSON-RPC 2.0 Notification 格式加密发布到 MQTT notice topic
+ * @param func_key 触发通知的指令标识
+ * @param event    事件类型 (如 "reset", "motor_started")
+ * @param data     事件附带数据 (cJSON 对象，函数内部接管并销毁)
+ *
+ * 输出为 JSON-RPC 2.0 通知 (无 id，服务端不回复):
+ * {
+ *   "jsonrpc": "2.0",
+ *   "method": "device.notify",
+ *   "params": {
+ *     "function_key": "reSet",
+ *     "event": "reset",
+ *     "data": {...}
+ *   }
+ * }
+ */
+void apex_cmd_send_notify(const char *func_key, const char *event, cJSON *data)
+{
+    ESP_LOGI(TAG, "apex_cmd_send_notify: [%s] event=%s", func_key ? func_key : "unknown", event ? event : "");
+
+    // 构造 JSON-RPC 2.0 Notification
+    cJSON *notify = cJSON_CreateObject();
+    cJSON_AddStringToObject(notify, "jsonrpc", "2.0");
+    cJSON_AddStringToObject(notify, "method", "device.notify");
+
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "function_key", func_key ? func_key : "unknown");
+    cJSON_AddStringToObject(params, "event", event ? event : "");
+    if (data)
+        cJSON_AddItemToObject(params, "data", data);
+    else
+        cJSON_AddNullToObject(params, "data");
+    cJSON_AddItemToObject(notify, "params", params);
+
+    char *notify_plain = cJSON_PrintUnformatted(notify);
+    if (notify_plain)
+    {
+        size_t plaintext_len = strlen(notify_plain);
+        size_t needed_size = 13 + 8 + plaintext_len + 16;
+        uint8_t *out_buf = (uint8_t *)malloc(needed_size);
+        size_t out_len = 0;
+
+        if (out_buf)
+        {
+            if (payload_crypto_encrypt((uint8_t *)notify_plain, plaintext_len, out_buf, &out_len) == ESP_OK)
+            {
+                const mqtt_topics_t *topics = mqtt_topics_get();
+                apex_mqtt_publish(topics->notice, (const char *)out_buf, (int)out_len, 1, 0);
+                ESP_LOGD(TAG, "notify 已 JSON-RPC 发布到 %s, 长度: %d", topics->notice, out_len);
+            }
+            free(out_buf);
+        }
+        free(notify_plain);
+    }
+    cJSON_Delete(notify);
+}
+
+/**
  * @brief 核心指令分发与执行函数
  * @param json_raw 解密后的明文字符串
  */
@@ -199,10 +329,14 @@ void apex_cmd_executor(const char *json_raw)
     if (json_raw == NULL)
         return;
 
+    // 喂看门狗：每次指令处理重置计时
+    esp_task_wdt_reset();
+
     cJSON *root = cJSON_Parse(json_raw);
     if (!root)
     {
         ESP_LOGE(TAG, "JSON 解析失败");
+        apex_cmd_send_notify("unknown", "parse_error", NULL);
         return;
     }
 
@@ -218,19 +352,30 @@ void apex_cmd_executor(const char *json_raw)
 
     const char *func_key = func_item->valuestring;
     const char *msg_id = msg_id_item->valuestring;
+
+    // 2. 重复指令拦截：同一个 msg_id 在窗口内再次收到直接拒绝
+    if (dedup_check_and_record(msg_id))
+    {
+        ESP_LOGW(TAG, "重复指令 [%s] (%s), 窗口内拦截", func_key, msg_id);
+        apex_cmd_send_sync(func_key, msg_id, APEX_ERR_DUPLICATE, NULL);
+        goto cleanup;
+    }
+
     cJSON *params_to_pass = cJSON_GetObjectItem(root, "function_params");
 
-    // 2. 获取指令定义
+    // 3. 获取指令定义
     const apex_cmd_entry_t *entry = apex_cmd_find_entry(func_key);
     if (!entry)
     {
         ESP_LOGW(TAG, "指令未找到: %s", func_key);
-        // 此时还未入场登记，直接回报错即可，无需 unlock
         apex_cmd_send_sync(func_key, msg_id, APEX_ERR_NOT_FOUND, NULL);
+        cJSON *nd = cJSON_CreateObject();
+        cJSON_AddStringToObject(nd, "reason", "function_not_found");
+        apex_cmd_send_notify(func_key, "command_failed", nd);
         goto cleanup;
     }
 
-    // 3. 入场登记 (Lock)
+    // 4. 入场登记 (Lock)
     int lock_ret = apex_state_lock(entry->flags, func_key, msg_id);
     if (lock_ret != APEX_OK)
     {
@@ -239,7 +384,26 @@ void apex_cmd_executor(const char *json_raw)
         goto cleanup;
     }
 
-    // 4. 执行业务逻辑
+    // 5. 熔断检查：指令连续失败 N 次则降级
+    fault_tracker_t *ft = fault_tracker_get(func_key);
+    if (ft && ft->degraded_until > 0)
+    {
+        if (xTaskGetTickCount() < ft->degraded_until)
+        {
+            ESP_LOGW(TAG, "指令 [%s] 已熔断降级，剩余: %d 秒",
+                     func_key, (int)((ft->degraded_until - xTaskGetTickCount()) * portTICK_PERIOD_MS / 1000));
+            apex_cmd_send_sync(func_key, msg_id, APEX_ERR_DEGRADED, NULL);
+            goto cleanup;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "指令 [%s] 降级到期，自动恢复", func_key);
+            ft->degraded_until = 0;
+            ft->fail_count = 0;
+        }
+    }
+
+    // 6. 执行业务逻辑
     cJSON *res_data = NULL;
     ESP_LOGI(TAG, "执行功能: %s [%s]  [%s]", entry->function_name, func_key, msg_id);
     if (entry->flags == APEX_CMD_FLAG_FORCE)
@@ -252,8 +416,37 @@ void apex_cmd_executor(const char *json_raw)
     }
     int status_code = entry->handler(params_to_pass, msg_id, &res_data);
 
+    // 故障分级：记录错误 & 通知 & 超额熔断
+    if (ft && status_code < 0 && status_code != APEX_ASYNC_OK)
+    {
+        ft->fail_count++;
+        ESP_LOGW(TAG, "指令 [%s] 执行失败 (code=%d), 累计: %d/%d",
+                 func_key, status_code, ft->fail_count, FAULT_MAX_FAILURES);
+
+        // 通知服务端：指令执行失败
+        cJSON *nd = cJSON_CreateObject();
+        cJSON_AddNumberToObject(nd, "code", status_code);
+        cJSON_AddStringToObject(nd, "reason", apex_err_to_msg(status_code));
+        cJSON_AddNumberToObject(nd, "consecutive_failures", ft->fail_count);
+        apex_cmd_send_notify(func_key, "command_failed", nd);
+        if (ft->fail_count >= FAULT_MAX_FAILURES)
+        {
+            ft->degraded_until = xTaskGetTickCount() + pdMS_TO_TICKS(FAULT_DEGRADE_MS);
+            ESP_LOGE(TAG, "指令 [%s] 已熔断降级 %d 分钟", func_key, FAULT_DEGRADE_MS / 60000);
+            cJSON *notify_data = cJSON_CreateObject();
+            cJSON_AddStringToObject(notify_data, "reason", "consecutive_failures");
+            cJSON_AddNumberToObject(notify_data, "fail_count", ft->fail_count);
+            cJSON_AddNumberToObject(notify_data, "degrade_minutes", FAULT_DEGRADE_MS / 60000);
+            apex_cmd_send_notify(func_key, "degraded", notify_data);
+        }
+    }
+    else if (ft && status_code >= 0)
+    {
+        ft->fail_count = 0; // 成功时清零
+    }
+
     // ==========================================
-    // 5. 核心：响应分发与状态流转 (生命周期终点)
+    // 7. 核心：响应分发与状态流转 (生命周期终点)
     // ==========================================
     if (status_code == APEX_ASYNC_OK)
     {

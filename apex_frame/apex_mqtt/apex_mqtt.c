@@ -228,17 +228,17 @@ bool mqtt_topics_init(void)
     int n;
 
     n = snprintf(s_cmd_buf, sizeof(s_cmd_buf),
-                 "controller/msg/command/%s", g_apex_config.mqtt.client_id);
+                 "apex/%s/command", g_apex_config.mqtt.client_id);
     if (n < 0 || n >= sizeof(s_cmd_buf))
         goto fail;
 
     n = snprintf(s_rsp_buf, sizeof(s_rsp_buf),
-                 "controller/msg/response/%s", g_apex_config.mqtt.client_id);
+                 "apex/%s/response", g_apex_config.mqtt.client_id);
     if (n < 0 || n >= sizeof(s_rsp_buf))
         goto fail;
 
     n = snprintf(s_ntc_buf, sizeof(s_ntc_buf),
-                 "controller/msg/notice/%s", g_apex_config.mqtt.client_id);
+                 "apex/%s/notify", g_apex_config.mqtt.client_id);
     if (n < 0 || n >= sizeof(s_ntc_buf))
         goto fail;
 

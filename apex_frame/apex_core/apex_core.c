@@ -7,6 +7,7 @@
 #include "apex_network.h"
 #include "apex_webserver.h"
 #include "apex_cmd_executor.h"
+#include "esp_task_wdt.h"
 
 // ============================================================================
 // 事件组 事件位   Event Group
@@ -80,15 +81,26 @@ esp_err_t apex_core_init(void)
     ESP_LOGI(TAG, "设备启动，初始化所有模块...");
     // 2. 创建系统事件循环
     ESP_ERROR_CHECK(apex_event_init());
-    // ESP_LOGI("MEM apex_event_init", "剩余堆内存: %d bytes, 最小历史剩余: %d bytes",
-    //          esp_get_free_heap_size(),
-    //          esp_get_minimum_free_heap_size());
 
     // 3. 初始化系统配置（从NVS加载）
     ESP_ERROR_CHECK(apex_config_init());
-    // ESP_LOGI("MEM apex_config_init", "剩余堆内存: %d bytes, 最小历史剩余: %d bytes",
-    //          esp_get_free_heap_size(),
-    //          esp_get_minimum_free_heap_size());
+
+    // 4. 初始化任务看门狗（30 秒超时，handler 卡死自动复位）
+    //    若系统已初始化（esp-idf 启动时开启），则跳过
+    //    ⚠ 不监控 main 任务，因为它只做初始化后进入空闲循环
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 30000,
+        .idle_core_mask = 0,
+        .trigger_panic = true,
+    };
+    if (esp_task_wdt_init(&twdt_config) == ESP_OK)
+    {
+        ESP_LOGI(TAG, "TWDT 已启用 (超时: %d ms)", twdt_config.timeout_ms);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "TWDT 已由系统初始化，使用现有配置");
+    }
 
     // 1. 初始化事件组
     // apex_event_group = xEventGroupCreate();
