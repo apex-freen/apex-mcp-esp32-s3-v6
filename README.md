@@ -210,15 +210,15 @@ apex-esp32-s3-v6/
 │   ├── apex_power_down/ / apex_power_up/  # 电源管理
 │   ├── apex_reset/ / apex_restart/     # 设备重置 / 重启
 │   ├── apex_stop/                      # 强制停止持续动作
-│   └── apex_get_state/                 # 获取设备当前状态
+│   ├── apex_get_state/                 # 获取设备当前状态
+│   └── apex_notify/                    # 设备事件通知
 │
 ├── common/                             # 通用基础组件（基础层）
 │   └── utils/                          # 通用工具函数库
 │
 ├── components/                         # 业务示例组件（应用层）
 │   ├── sync_add/                       # 同步指令开发示例
-│   ├── async_add/                      # 异步指令开发示例
-│   └── apex_notify/                    # 设备事件通知示例
+│   └── async_add/                      # 异步指令开发示例
 │
 └── build/                              # 编译输出目录
 ```
@@ -286,7 +286,7 @@ tools/call ──────────→  转 {function_key, params}  →  �
 
 ### Notify 使用示例
 
-见 [components/apex_notify/](components/apex_notify/) — 演示如何通过 `apex_cmd_send_notify()` 推送 JSON-RPC 2.0 通知。
+见 [apex_frame/apex_notify/](apex_frame/apex_notify/) — 演示如何通过 `apex_cmd_send_notify()` 推送 JSON-RPC 2.0 通知。
 
 ---
 
