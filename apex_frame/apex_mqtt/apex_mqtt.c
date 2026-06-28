@@ -275,6 +275,10 @@ void apex_set_system_time(uint64_t ms_timestamp)
 void apex_http_time_sync_task(void *pvParameters)
 {
     char *url = (char *)pvParameters;
+
+    // 延迟 3 秒，等待网络栈 / mDNS 完全就绪后再请求时间同步
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
     ESP_LOGI(TAG, "HTTP 开始同步 url: %s", url);
 
     esp_http_client_config_t config = {

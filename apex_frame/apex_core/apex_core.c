@@ -88,6 +88,9 @@ esp_err_t apex_core_init(void)
     // 4. 初始化任务看门狗（30 秒超时，handler 卡死自动复位）
     //    若系统已初始化（esp-idf 启动时开启），则跳过
     //    ⚠ 不监控 main 任务，因为它只做初始化后进入空闲循环
+    //    临时降级 task_wdt 的日志级别，避免 "TWDT already initialized" 被当作 ERROR 输出
+    esp_log_level_t prev_level = esp_log_level_get("task_wdt");
+    esp_log_level_set("task_wdt", ESP_LOG_WARN);
     esp_task_wdt_config_t twdt_config = {
         .timeout_ms = 30000,
         .idle_core_mask = 0,
@@ -101,6 +104,7 @@ esp_err_t apex_core_init(void)
     {
         ESP_LOGW(TAG, "TWDT 已由系统初始化，使用现有配置");
     }
+    esp_log_level_set("task_wdt", prev_level);
 
     // 1. 初始化事件组
     // apex_event_group = xEventGroupCreate();

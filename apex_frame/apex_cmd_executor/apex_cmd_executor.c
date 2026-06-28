@@ -34,6 +34,7 @@ typedef struct
 } fault_tracker_t;
 
 static fault_tracker_t s_fault_trackers[30];
+static int s_fault_count = 0;
 
 // 重复指令拦截缓存
 typedef struct
@@ -76,14 +77,16 @@ static fault_tracker_t *fault_tracker_get(const char *cmd_key)
 {
     if (!cmd_key)
         return NULL;
-    for (int i = 0; i < s_cmd_count; i++)
+    for (int i = 0; i < s_fault_count; i++)
     {
         if (strcmp(s_fault_trackers[i].cmd_key, cmd_key) == 0)
             return &s_fault_trackers[i];
     }
     // 新条目
-    strncpy(s_fault_trackers[s_cmd_count].cmd_key, cmd_key, sizeof(s_fault_trackers[0].cmd_key) - 1);
-    return &s_fault_trackers[s_cmd_count++];
+    if (s_fault_count >= 30)
+        return NULL;
+    strncpy(s_fault_trackers[s_fault_count].cmd_key, cmd_key, sizeof(s_fault_trackers[0].cmd_key) - 1);
+    return &s_fault_trackers[s_fault_count++];
 }
 
 // 设备指令状态设计
