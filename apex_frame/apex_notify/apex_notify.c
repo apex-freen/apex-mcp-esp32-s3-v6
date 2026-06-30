@@ -1,5 +1,6 @@
 #define TAG "APEX_NOTIFY_LOG"
 #include "esp_log.h"
+#include "esp_err.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -81,7 +82,7 @@ static int notify_demo_handler(cJSON *params, const char *msg_id, cJSON **res_da
 // ============================================================================
 // 3. 组件注册入口
 // ============================================================================
-void apex_notify_init(void)
+esp_err_t apex_notify_init(void)
 {
     static char function_params_json_buf[512];
     int count = sizeof(function_params) / sizeof(function_params[0]);
@@ -104,4 +105,5 @@ void apex_notify_init(void)
 
     apex_cmd_register(entry);
     ESP_LOGI(TAG, "组件注册成功: %s (v%s)", entry.cmd_key, entry.version);
+    return ESP_OK;
 }

@@ -20,6 +20,6 @@
  *   }
  * }
  */
-void apex_notify_init(void);
+esp_err_t apex_notify_init(void);
 
 #endif // APEX_NOTIFY_H

@@ -8,6 +8,7 @@
 #include "apex_webserver.h"
 #include "apex_cmd_executor.h"
 #include "esp_task_wdt.h"
+#include "apex_notify.h"
 
 // ============================================================================
 // 事件组 事件位   Event Group
@@ -139,6 +140,8 @@ esp_err_t apex_core_init(void)
     // ESP_LOGI("MEM apex_cmd_executor_init", "剩余堆内存: %d bytes, 最小历史剩余: %d bytes",
     //          esp_get_free_heap_size(),
     //          esp_get_minimum_free_heap_size());
+
+    ESP_ERROR_CHECK(apex_notify_init());
 
     ESP_LOGI(TAG, "所有模块初始化完成：");
     ESP_LOGI(TAG, "1. WiFi: APSTA模式");

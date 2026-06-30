@@ -27,6 +27,8 @@ static bool s_inited = false;
 static const char *TAG = "APEX_MQTT";
 static esp_mqtt_client_handle_t s_mqtt_client = NULL;
 static bool s_is_mqtt_connected = false;
+static uint32_t s_reconnect_delay_ms = 1000;
+static const uint32_t s_max_reconnect_delay_ms = 60000;
 
 // --- 步骤 1：处理 MQTT 原生事件 ---
 void apex_http_time_sync_task(void *pvParameters);
@@ -39,6 +41,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT 已连接到 Broker!");
         s_is_mqtt_connected = true;
+        s_reconnect_delay_ms = 1000;
         // 广播 Sticky 事件，通知其他业务模块（比如传感器采数据的 Task）可以开始发数据了
         apex_event_send(APEX_EVENT_MQTT_CONNECTED, NULL, 0);
 
@@ -60,10 +63,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_DISCONNECTED:
         if (s_is_mqtt_connected)
         {
-            ESP_LOGW(TAG, "MQTT 连接断开");
+            ESP_LOGW(TAG, "MQTT 连接断开，%d ms 后尝试重连", s_reconnect_delay_ms);
             s_is_mqtt_connected = false;
-            // 广播断开事件，清除 Sticky 状态
             apex_event_send(APEX_EVENT_MQTT_DISCONNECTED, NULL, 0);
+            s_reconnect_delay_ms = s_reconnect_delay_ms * 2;
+            if (s_reconnect_delay_ms > s_max_reconnect_delay_ms)
+            {
+                s_reconnect_delay_ms = s_max_reconnect_delay_ms;
+            }
         }
         break;
 
@@ -122,10 +129,12 @@ static void start_mqtt_client(void)
             .authentication.password = g_apex_config.mqtt.password,
         },
         .session = {
-            .keepalive = 60,
+            .keepalive = 120, // 保活 120 秒（默认 60）
+            .disable_keepalive = false,
         },
         .network = {
-            .reconnect_timeout_ms = 10000, // 断线 10 秒后自动重连
+            .reconnect_timeout_ms = 5000, // 断线 5 秒后重连
+            .timeout_ms = 10000,          // socket 超时 10 秒
         }};
 
     if (s_mqtt_client == NULL)
@@ -149,8 +158,8 @@ static void network_event_handler(void *arg, esp_event_base_t base, int32_t id, 
 {
     if (id == APEX_EVENT_NET_CONNECTED)
     {
-        ESP_LOGI(TAG, "检测到网络已连接，正在拉起 MQTT...");
-        // 只有网通了，才去启动或恢复 MQTT 连接
+        ESP_LOGI(TAG, "检测到网络已连接，%d ms 后拉起 MQTT...", s_reconnect_delay_ms);
+        vTaskDelay(pdMS_TO_TICKS(s_reconnect_delay_ms));
         start_mqtt_client();
     }
     else if (id == APEX_EVENT_NET_DISCONNECTED)
@@ -158,15 +167,13 @@ static void network_event_handler(void *arg, esp_event_base_t base, int32_t id, 
         ESP_LOGW(TAG, "检测到网络断开，暂停 MQTT...");
         if (s_mqtt_client != NULL)
         {
-            // 网断了直接停掉底层的 TCP 尝试，省电且防止无意义的 CPU 轮询
             esp_mqtt_client_stop(s_mqtt_client);
         }
     }
     else if (id == APEX_EVENT_MQTT_CONFIG_UPDATED)
-    { // 假设加了这个配置更新事件
+    {
         ESP_LOGI(TAG, "检测到 MQTT 配置更新，正在重载...");
-        // 检查当前是否有网，有网才直接拉起
-        // （这里由于网络模块是独立运转的，如果当前没网，重新配置后它会等下一次 NET_CONNECTED 再启动）
+        s_reconnect_delay_ms = 1000;
         start_mqtt_client();
     }
 }
@@ -271,71 +278,84 @@ void apex_set_system_time(uint64_t ms_timestamp)
     ESP_LOGI(TAG, "系统时间已手动对齐: %llu", ms_timestamp);
 }
 
-// HTTP 任务：请求并解析时间
+// HTTP 任务：请求并解析时间（带重试）
 void apex_http_time_sync_task(void *pvParameters)
 {
     char *url = (char *)pvParameters;
 
-    // 延迟 3 秒，等待网络栈 / mDNS 完全就绪后再请求时间同步
+    // 延迟 3 秒，等待网络栈 / mDNS 完全就绪
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ESP_LOGI(TAG, "HTTP 开始同步 url: %s", url);
+    int retry_count = 0;
+    const int max_retries = 5;
 
-    esp_http_client_config_t config = {
-        .url = url,
-        .method = HTTP_METHOD_GET,
-        .timeout_ms = 5000,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-
-    // 1. 打开连接并发送请求
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err == ESP_OK)
+    while (retry_count < max_retries)
     {
-        // 2. 获取响应头
-        int content_length = esp_http_client_fetch_headers(client);
-        int status_code = esp_http_client_get_status_code(client);
-
-        ESP_LOGI(TAG, "HTTP 状态码: %d, 内容长度: %d", status_code, content_length);
-
-        if (status_code == 200)
+        if (retry_count > 0)
         {
-            // 准备缓冲区 (27 字节的数据，申请 128 足够了)
-            char *buffer = malloc(256);
-            // 3. 手动读取数据
-            int read_len = esp_http_client_read(client, buffer, 256);
-
-            if (read_len > 0)
-            {
-                buffer[read_len] = '\0';
-                ESP_LOGI(TAG, "成功获取原始 JSON: %s", buffer);
-
-                // 解析 JSON
-                cJSON *root = cJSON_Parse(buffer);
-                if (root)
-                {
-                    cJSON *ts_item = cJSON_GetObjectItem(root, "timestamp");
-                    if (cJSON_IsNumber(ts_item))
-                    {
-                        uint64_t ts = (uint64_t)ts_item->valuedouble;
-                        apex_set_system_time(ts); // 设置系统时间
-                    }
-                    cJSON_Delete(root);
-                }
-            }
-            else
-            {
-                ESP_LOGE(TAG, "读取数据失败或为空");
-            }
-            free(buffer);
+            ESP_LOGI(TAG, "HTTP 时间同步第 %d 次重试...", retry_count);
+            vTaskDelay(pdMS_TO_TICKS(5000)); // 重试间隔 5 秒
         }
-    }
-    else
-    {
-        ESP_LOGE(TAG, "无法打开 HTTP 连接: %s", esp_err_to_name(err));
+
+        ESP_LOGI(TAG, "HTTP 开始同步 url: %s", url);
+
+        esp_http_client_config_t config = {
+            .url = url,
+            .method = HTTP_METHOD_GET,
+            .timeout_ms = 10000,
+        };
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+
+        esp_err_t err = esp_http_client_open(client, 0);
+        if (err == ESP_OK)
+        {
+            int content_length = esp_http_client_fetch_headers(client);
+            int status_code = esp_http_client_get_status_code(client);
+
+            ESP_LOGI(TAG, "HTTP 状态码: %d, 内容长度: %d", status_code, content_length);
+
+            if (status_code == 200)
+            {
+                char *buffer = malloc(256);
+                int read_len = esp_http_client_read(client, buffer, 256);
+                if (read_len > 0)
+                {
+                    buffer[read_len] = '\0';
+                    ESP_LOGI(TAG, "成功获取原始 JSON: %s", buffer);
+                    cJSON *root = cJSON_Parse(buffer);
+                    if (root)
+                    {
+                        cJSON *ts_item = cJSON_GetObjectItem(root, "timestamp");
+                        if (cJSON_IsNumber(ts_item))
+                        {
+                            uint64_t ts = (uint64_t)ts_item->valuedouble;
+                            apex_set_system_time(ts);
+                            ESP_LOGI(TAG, "时间同步成功");
+                        }
+                        cJSON_Delete(root);
+                    }
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "读取数据失败或为空");
+                }
+                free(buffer);
+                esp_http_client_cleanup(client);
+                free(url);
+                vTaskDelete(NULL);
+                return; // 成功，退出
+            }
+        }
+        else
+        {
+            ESP_LOGW(TAG, "HTTP 连接失败: %s", esp_err_to_name(err));
+        }
+
+        esp_http_client_cleanup(client);
+        retry_count++;
     }
 
-    esp_http_client_cleanup(client);
+    ESP_LOGE(TAG, "HTTP 时间同步失败，已达最大重试次数 (%d)", max_retries);
     free(url);
     vTaskDelete(NULL);
 }
