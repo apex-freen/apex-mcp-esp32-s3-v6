@@ -20,7 +20,6 @@ void app_main(void)
 
     async_add_init();
     sync_add_init();
-    apex_notify_init();
     // 再次查看
     uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
     ESP_LOGI(TAG, "Main task stack free after init: %d bytes", uxHighWaterMark);
