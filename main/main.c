@@ -7,7 +7,6 @@
 
 #include "async_add.h"
 #include "sync_add.h"
-#include "apex_notify.h"
 
 static const char *TAG = "MAIN";
 void app_main(void)
