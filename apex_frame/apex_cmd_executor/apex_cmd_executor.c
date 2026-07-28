@@ -588,6 +588,7 @@ cJSON *apex_cmd_getinfo(void)
         }
 
         cJSON_AddStringToObject(item, "role", s_cmd_table[i].role);
+        cJSON_AddStringToObject(item, "risk_level", s_cmd_table[i].risk_level);
         cJSON_AddStringToObject(item, "version", s_cmd_table[i].version);
         cJSON_AddItemToArray(tools_array, item);
     }
@@ -680,6 +681,7 @@ esp_err_t apex_cmd_executor_init(void)
         .function_desc = "返回设备当前支持的所有指令、参数结构及版本信息（无需参数）",
         .function_params = "{\"type\":\"object\",\"properties\":{}}", // 无参
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.0",
         .handler = apex_cmd_getinfo_handler};
     apex_cmd_register(info_cmd);

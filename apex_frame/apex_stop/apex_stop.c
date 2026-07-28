@@ -69,6 +69,7 @@ esp_err_t apex_stop_init(void)
         .function_desc = "强制停止指定的持续性动作或异步任务",
         .function_params = function_params_json_buf, // {"fun_key":"string"} — 指定要停止的目标指令 key
         .role = "admin",                             // 停止别的指令通常需要较高权限
+        .risk_level = "normal",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // ✅ 关键：必须是 FORCE，无视设备当前的 BUSY 状态
         .is_persistent = false,       // 停止指令本身是个瞬间动作

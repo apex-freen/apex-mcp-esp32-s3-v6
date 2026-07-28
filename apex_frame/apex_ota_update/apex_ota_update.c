@@ -246,6 +246,7 @@ esp_err_t apex_ota_update_init(void)
         .function_desc = "固件升级到最新版本",
         .function_params = function_params_json_buf,
         .role = "admin",
+        .risk_level = "auth",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_EXCLUSIVE, // ✅ 独占指令，升级的时候 ，不允许其他动作进来
         .is_persistent = true,

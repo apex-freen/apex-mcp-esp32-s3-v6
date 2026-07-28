@@ -100,6 +100,7 @@ esp_err_t apex_get_state_init(void)
         .function_desc = "获取设备当前指令状态（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_ALWAYS_ALLOWED, // 常驻开放：状态查询在任何情况下都应可执行
         .handler = apex_get_state_handler,

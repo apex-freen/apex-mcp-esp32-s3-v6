@@ -92,6 +92,7 @@ esp_err_t apex_reset_init(void)
         .function_desc = "系统重置为默认状态，重要操作需谨慎（无需参数）",
         .function_params = function_params_json_buf,
         .role = "admin",
+        .risk_level = "auth",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // 强制属性：重置为最高优先级，无视系统忙碌状态
         .handler = apex_reset_handler,

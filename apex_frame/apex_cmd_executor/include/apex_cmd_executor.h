@@ -41,7 +41,7 @@ typedef struct
     char cmd_key[32];    // 指令标识 (如 "motor_move")
     char msg_id[64];     // 本次指令的唯一 ID (用于精确匹配)
     bool is_persistent;  // 是否为持久化动作 (由 apex_stop 关掉)
-    uint32_t start_tick; // 启动时间戳 (方便计算“已运行时长”)
+    uint32_t start_tick; // 启动时间戳 (方便计算"已运行时长")
     bool in_use;         // 槽位占用标志
 } apex_active_cmd_t;
 
@@ -101,6 +101,7 @@ typedef struct
     const char *function_desc;   // 功能详细介绍
     const char *function_params; // 参数定义 (JSON Schema 格式，由 build_function_param_desc_json 生成)
     const char *role;            // 权限角色 (如 "admin", "user", "guest")
+    const char *risk_level;      // 风险等级：normal(正常放行) / risk(告警但放行) / auth(需人工授权)
     const char *version;         // 版本号 (如 "1.0.2")
     apex_cmd_flag_t flags;       // <--- 新增：指令并发属性
     apex_cmd_handler_t handler;  // 执行函数指针
@@ -151,7 +152,7 @@ typedef struct
     int default_val;
 } function_param_desc_t;
 
-// 2. 扔进“安全管道”：解码 -> 解密 -> 分发
+// 2. 扔进"安全管道"：解码 -> 解密 -> 分发
 // 这里的 apex_process_incoming_cmd 是我们定义的管道入口
 void apex_process_incoming_cmd(const char *cipher_text, size_t data_len);
 

@@ -60,6 +60,7 @@ esp_err_t apex_restart_init(void)
         .function_desc = "系统重启功能，重要操作需谨慎（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "auth",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_FORCE, // 强制属性：重启为最高优先级，无视系统忙碌状态
         .handler = apex_restart_handler,

@@ -121,6 +121,7 @@ void sync_add_init(void)
         .function_desc = "同步加法：接收两个参数，立即返回计算结果",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_PARALLEL, // 并行指令，不锁定系统，可与其他指令同时执行
         .handler = sync_add_handler,

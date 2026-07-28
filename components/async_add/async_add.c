@@ -176,6 +176,7 @@ void async_add_init(void)
         .function_desc = "模拟耗时操作：接收两个参数，延迟100秒后返回加法结果",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.1",
         .handler = apex_cmd_add_handler};
 

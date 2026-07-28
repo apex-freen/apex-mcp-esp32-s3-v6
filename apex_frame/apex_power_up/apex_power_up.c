@@ -51,6 +51,7 @@ esp_err_t apex_power_up_init(void)
         .function_desc = "系统开机功能（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_ALWAYS_ALLOWED, // 常驻开放：开机唤醒在任何情况下都应可执行
         .handler = apex_power_up_handler,

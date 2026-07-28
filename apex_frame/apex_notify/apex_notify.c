@@ -96,6 +96,7 @@ esp_err_t apex_notify_init(void)
         .function_desc = "演示设备主动事件通知：调用后立即向服务端推送 JSON-RPC 2.0 通知，同时返回确认",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "normal",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_PARALLEL,
         .handler = notify_demo_handler,

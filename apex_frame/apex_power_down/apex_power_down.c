@@ -51,6 +51,7 @@ esp_err_t apex_power_down_init(void)
         .function_desc = "系统关机功能，进入低功耗模式，只有开机命令才能恢复工作（无需参数）",
         .function_params = function_params_json_buf,
         .role = "user",
+        .risk_level = "auth",
         .version = "1.0.0",
         .flags = APEX_CMD_FLAG_ALWAYS_ALLOWED, // 常驻开放：关机休眠在任何情况下都应可执行
         .handler = apex_power_down_handler,
