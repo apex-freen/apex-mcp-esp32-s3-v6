@@ -1042,6 +1042,13 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
             cJSON_AddStringToObject(obj, "type", "number");
         else if (strcmp(p->type, "bool") == 0)
             cJSON_AddStringToObject(obj, "type", "boolean");
+        else if (strcmp(p->type, "array") == 0)
+        {
+            cJSON_AddStringToObject(obj, "type", "array");
+            cJSON *items = cJSON_CreateObject();
+            cJSON_AddStringToObject(items, "type", "string");
+            cJSON_AddItemToObject(obj, "items", items);
+        }
         else
             cJSON_AddStringToObject(obj, "type", p->type); // "string" 等原样
 
@@ -1078,8 +1085,8 @@ char *build_function_param_desc_json(const function_param_desc_t *params, int co
                 cJSON_AddNumberToObject(obj, "multipleOf", p->multipleOf_val);
         }
 
-        // 5. 默认值
-        if (p->has_default)
+        // 5. 默认值（array 无默认值，跳过）
+        if (p->has_default && strcmp(p->type, "array") != 0)
         {
             if (strcmp(p->type, "string") == 0 && p->enum_count > 0)
                 cJSON_AddStringToObject(obj, "default", p->enum_vals[p->default_val]);
