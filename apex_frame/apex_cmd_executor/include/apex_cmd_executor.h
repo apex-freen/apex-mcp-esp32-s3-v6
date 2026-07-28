@@ -129,7 +129,7 @@ typedef struct
 typedef struct
 {
     const char *key;         // 参数名: "add", "adder"...
-    const char *type;        // 类型: "int", "float", "bool", "string"
+    const char *type;        // 类型: "int", "float", "bool", "string", "array"
     const char *description; // 参数说明 (可选): "第一个加数"、"风扇模式 cool/heat/fan"
 
     // 数值范围约束（数值类型用）
