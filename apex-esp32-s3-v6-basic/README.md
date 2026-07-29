@@ -26,7 +26,7 @@
 
 ## 📖 What is this?
 
-`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**, built against the **latest MCP protocol specification (July 2026)**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — a hardware security gateway that lets AI agents control physical devices and services.
+`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**, built against the **latest MCP protocol specification (July 2026)**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — the hardware-side firmware layer, working with [service-plugins](https://github.com/apex-freen/service-plugins) to form the full AI-to-hardware stack.
 
 This project gives you a **complete, production-ready firmware base** that:
 
@@ -488,6 +488,18 @@ Before registering a new command, verify:
 - [ ] If `is_persistent = true`: `stop_handler` is implemented and calls `apex_cmd_finish()`
 - [ ] For async: `msg_id` is saved in context struct and passed to `apex_cmd_finish()`
 - [ ] `init()` is called **after** `apex_cmd_executor_init()` in `main.c`
+
+---
+
+## 🧩 Ecosystem Repos
+
+This project is the **hardware firmware** layer. The full stack:
+
+| Project | Role | Repo |
+|---------|------|------|
+| **apex_mcp_bridge** | Core — AI agent ↔ hardware gateway | [github.com/apex-freen/apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) |
+| **service-plugins** | Extensible plugin framework | [github.com/apex-freen/service-plugins](https://github.com/apex-freen/service-plugins) |
+| **apex-esp32-s3-v6** | Hardware firmware (this repo) | [github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
 
 ---
 

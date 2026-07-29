@@ -27,7 +27,7 @@
 
 ## 📖 这是什么？
 
-`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，基于**最新 MCP 协议规范（2026 年 7 月）**构建，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端。
+`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，基于**最新 MCP 协议规范（2026 年 7 月）**构建，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端，与 [service-plugins（插件框架）](https://gitee.com/freen/service-plugins) 共同构成完整的 AI 到硬件的技术栈。
 
 这个项目提供了一套**完整的、可量产的固件底座**：
 
@@ -485,6 +485,18 @@ apex-esp32-s3-v6-basic/
 - [ ] 若 `is_persistent = true`：已实现 `stop_handler` 并在其中调用 `apex_cmd_finish()`
 - [ ] 异步任务：`msg_id` 已保存到上下文结构体，完成时传给 `apex_cmd_finish()`
 - [ ] `init()` 在 `main.c` 中 **`apex_cmd_executor_init()` 之后** 调用
+
+---
+
+## 🧩 生态仓库
+
+本项目是 **底层硬件固件** 层。完整技术栈：
+
+| 项目 | 定位 | 仓库 |
+|------|------|------|
+| **apex_mcp_bridge** | 核心 — 智能体 ↔ 硬件网关 | [gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
+| **service-plugins** | 可扩展插件框架 | [gitee.com/freen/service-plugins](https://gitee.com/freen/service-plugins) |
+| **apex-esp32-s3-v6** | 底层硬件固件（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
 
 ---
 

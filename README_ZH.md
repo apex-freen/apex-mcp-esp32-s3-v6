@@ -30,7 +30,7 @@
 
 ## 📖 APEX 是什么？
 
-**APEX** 是一个开源的 **ESP32 智能体设备固件框架**，是 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态的硬件端基石。
+**APEX** 是一个开源的 **ESP32 智能体设备固件框架**，是 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态的硬件端基石，与 [service-plugins（插件框架）](https://gitee.com/freen/service-plugins) 共同构成完整的 AI 到硬件的技术栈。
 
 > 一句话：你只需专注做好自己的硬件产品，无需开发 App、无需搭建云端、无需理解 MCP 协议。**你甚至不需要自己动手写代码**——框架提供了标准化的模板与约束，只需向任何 MCP 智能体描述你的设备功能，智能体就能自动生成 handler 代码并注册，你的设备立刻就能被**任何支持 MCP 协议的智能体应用**控制，不限平台、不限模型。
 
@@ -208,8 +208,14 @@ APEX 框架设计为 **芯片无关、平台无关**：
 |------|------|
 | QQ 群 | 882419824（入群答案：`APEX智能体设备`） |
 | Discord | `#`（即将上线） |
-| Gitee | [https://gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
-| 项目介绍 | [https://gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
+
+## 🧩 生态仓库
+
+| 项目 | 定位 | 仓库 |
+|------|------|------|
+| **apex_mcp_bridge** | 核心 — 智能体 ↔ 硬件网关 | [gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
+| **service-plugins** | 可扩展插件框架 | [gitee.com/freen/service-plugins](https://gitee.com/freen/service-plugins) |
+| **apex-esp32-s3-v6** | 底层硬件固件（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
 
 ---
 
