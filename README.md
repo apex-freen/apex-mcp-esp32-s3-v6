@@ -29,7 +29,7 @@
 
 ## 📖 What is APEX?
 
-**APEX** is an open-source **ESP32 agent-device firmware framework** and the hardware-side foundation of the [apex_mcp_bridge](https://gitee.com/freen/apex-mcp-bridge) ecosystem.
+**APEX** is an open-source **ESP32 agent-device firmware framework** and the hardware-side foundation of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem.
 
 > In short: build your hardware product. That's it. No apps. No cloud backends. No MCP protocol knowledge required. **You don't even need to write code yourself** — the framework provides standardized templates that constrain the structure. Just describe your device's behavior to any MCP-compatible AI agent, it can generate the handler code for you, register it, and your device is instantly controllable — no matter which platform or model you use.
 
@@ -208,7 +208,7 @@ APEX is designed to be **chip-agnostic and platform-agnostic**:
 | Discord | `#` (coming soon) |
 | QQ Group | 882419824 (join keyword: `APEX智能体设备`) |
 | GitHub | [https://github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
-| Project Intro | [https://gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
+| Project Intro | [https://github.com/apex-freen/apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) |
 
 ---
 

@@ -25,7 +25,7 @@
 
 ## 📖 What is this?
 
-`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**. It is part of the [apex_mcp_bridge](https://gitee.com/freen/apex-mcp-bridge) ecosystem — a hardware security gateway that lets AI agents control physical devices and services.
+`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — a hardware security gateway that lets AI agents control physical devices and services.
 
 This project gives you a **complete, production-ready firmware base** that:
 
