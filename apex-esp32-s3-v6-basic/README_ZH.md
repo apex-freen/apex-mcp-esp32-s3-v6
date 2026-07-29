@@ -496,7 +496,8 @@ apex-esp32-s3-v6-basic/
 |------|------|------|
 | **apex_mcp_bridge** | 核心 — 智能体 ↔ 硬件网关 | [gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
 | **service-plugins** | 可扩展插件框架 | [gitee.com/freen/service-plugins](https://gitee.com/freen/service-plugins) |
-| **apex-esp32-s3-v6** | 底层硬件固件（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
+| **apex-esp32-s3-v6** | 底层硬件固件 — ESP32-S3（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
+| **apex-esp32-c3-v6** | 底层硬件固件 — ESP32-C3 | [gitee.com/freen/apex-esp32-c3-v6](https://gitee.com/freen/apex-esp32-c3-v6) |
 
 ---
 

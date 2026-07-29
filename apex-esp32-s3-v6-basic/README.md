@@ -499,7 +499,8 @@ This project is the **hardware firmware** layer. The full stack:
 |---------|------|------|
 | **apex_mcp_bridge** | Core — AI agent ↔ hardware gateway | [github.com/apex-freen/apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) |
 | **service-plugins** | Extensible plugin framework | [github.com/apex-freen/service-plugins](https://github.com/apex-freen/service-plugins) |
-| **apex-esp32-s3-v6** | Hardware firmware (this repo) | [github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
+| **apex-esp32-s3-v6** | Hardware firmware — ESP32-S3 (this repo) | [github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
+| **apex-esp32-c3-v6** | Hardware firmware — ESP32-C3 | [github.com/apex-freen/apex-esp32-c3-v6](https://github.com/apex-freen/apex-esp32-c3-v6) |
 
 ---
 
