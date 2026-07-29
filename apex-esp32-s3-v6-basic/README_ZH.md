@@ -3,6 +3,7 @@
   <img src="https://img.shields.io/badge/ESP--IDF-v6.X-green.svg" alt="ESP-IDF">
   <img src="https://img.shields.io/badge/Platform-ESP32--S3-orange.svg" alt="Platform">
   <img src="https://img.shields.io/badge/MCP-Standard-purple.svg" alt="MCP">
+  <img src="https://img.shields.io/badge/MCP_Spec-2026.07-blue.svg" alt="MCP Spec">
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
@@ -26,7 +27,7 @@
 
 ## 📖 这是什么？
 
-`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端。
+`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，基于**最新 MCP 协议规范（2026 年 7 月）**构建，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端。
 
 这个项目提供了一套**完整的、可量产的固件底座**：
 

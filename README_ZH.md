@@ -3,13 +3,14 @@
   <img src="https://img.shields.io/badge/ESP--IDF-v6.X-green.svg" alt="ESP-IDF">
   <img src="https://img.shields.io/badge/Platform-ESP32--S3%20%7C%20ESP32--C3-orange.svg" alt="Platform">
   <img src="https://img.shields.io/badge/MCP-Standard-purple.svg" alt="MCP">
+  <img src="https://img.shields.io/badge/MCP_Spec-2026.07-blue.svg" alt="MCP Spec">
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
 <h1 align="center">APEX — 通用智能体设备开发框架</h1>
 
 <p align="center">
-  <em>将 ESP32 芯片变成一颗任何支持 MCP 协议的智能体都能直接控制的「智能设备芯」</em>
+  <em>将 ESP32 芯片变成一颗任何支持 MCP 协议的智能体都能直接控制的「智能设备芯」<br>全面支持最新 MCP 协议规范（2026 年 7 月）</em>
 </p>
 
 <p align="center">

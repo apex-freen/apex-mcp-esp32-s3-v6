@@ -3,13 +3,14 @@
   <img src="https://img.shields.io/badge/ESP--IDF-v6.X-green.svg" alt="ESP-IDF">
   <img src="https://img.shields.io/badge/Platform-ESP32--S3%20%7C%20ESP32--C3-orange.svg" alt="Platform">
   <img src="https://img.shields.io/badge/MCP-Standard-purple.svg" alt="MCP">
+  <img src="https://img.shields.io/badge/MCP_Spec-2026.07-blue.svg" alt="MCP Spec">
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
 <h1 align="center">APEX — Universal Agent Device Framework</h1>
 
 <p align="center">
-  <em>Turn an ESP32 chip into a "smart device core" that any MCP-compatible AI agent can control directly.</em>
+  <em>Turn an ESP32 chip into a "smart device core" that any MCP-compatible AI agent can control directly.<br>Fully compliant with the latest MCP specification (July 2026).</em>
 </p>
 
 <p align="center">

@@ -3,6 +3,7 @@
   <img src="https://img.shields.io/badge/ESP--IDF-v6.X-green.svg" alt="ESP-IDF">
   <img src="https://img.shields.io/badge/Platform-ESP32--S3-orange.svg" alt="Platform">
   <img src="https://img.shields.io/badge/MCP-Standard-purple.svg" alt="MCP">
+  <img src="https://img.shields.io/badge/MCP_Spec-2026.07-blue.svg" alt="MCP Spec">
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
@@ -25,7 +26,7 @@
 
 ## 📖 What is this?
 
-`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — a hardware security gateway that lets AI agents control physical devices and services.
+`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**, built against the **latest MCP protocol specification (July 2026)**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — a hardware security gateway that lets AI agents control physical devices and services.
 
 This project gives you a **complete, production-ready firmware base** that:
 
