@@ -81,3 +81,19 @@ Desktop.ini
 .clangd
 dependencies.lock
 sdkconfig.old
+
+# IDE
+.idea/
+*.iml
+
+# AI assistant
+.workbuddy/
+
+# OS generated
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
+# ESP-IDF extra
+mfg_config.csv
+*.orig

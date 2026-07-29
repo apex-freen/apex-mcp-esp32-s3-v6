@@ -1,395 +1,498 @@
-<!--
-  ┌──────────────────────────────────────────────────┐
-  │  apex-mcp-bridge Service Plugins                 │
-  │  README 模板 —— 所有项目级文档均照此结构           │
-  └──────────────────────────────────────────────────┘
--->
 <p align="center">
-  <img src="https://img.shields.io/badge/host-apex--mcp--bridge-6c5ce7?style=flat-square" alt="Host">
-  <img src="https://img.shields.io/badge/api%20version-plugin.gis%2Fv1-6c5ce7?style=flat-square" alt="API Version">
-  <img src="https://img.shields.io/badge/python-≥3.10-3776AB?logo=python&style=flat-square" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/ESP--IDF-v6.X-green.svg" alt="ESP-IDF">
+  <img src="https://img.shields.io/badge/Platform-ESP32--S3-orange.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/MCP-Standard-purple.svg" alt="MCP">
+  <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
-# apex-mcp-bridge 服务插件集
+<h1 align="center">apex-esp32-s3-v6-basic</h1>
 
-[apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) 的官方插件生态仓库。每个插件为一个独立服务能力 —— 文件管理、数据报表、网络打印等。
+<p align="center">
+  <em>APEX 通用智能体设备框架 — ESP32-S3 基础参考实现<br>写一个 handler，注册一条指令，你的 AI 智能体就多一个技能。</em>
+</p>
 
-> **设计哲学**：把插件文件夹拷贝到 `service_plugins/` 下，bridge 自动检测并动态加载，无需重启、无需接线、无需注册。
->
-> **真正的亮点**：任何人 —— 哪怕完全不懂代码 —— 都可以让 AI 智能体按照本文档中的模板和规范，自动生成自己需要的插件。想要打印机插件？数据报表插件？只需用自然语言描述需求，智能体就能帮你写出来。优秀的社区作品将收录到官方插件库。
+<p align="center">
+  <a href="#-这是什么">是什么</a> ·
+  <a href="#-核心能力">能力</a> ·
+  <a href="#-架构">架构</a> ·
+  <a href="#-快速开始">快速开始</a> ·
+  <a href="#-内置指令">内置指令</a> ·
+  <a href="#-开发你自己的指令">开发指南</a> ·
+  <a href="./README.md">English</a>
+</p>
 
-> ⚠️ **安全提醒**：插件会在你的主机上执行 Python 代码。请仅安装来自官方仓库或你完全信任来源的插件。如果你从非官方渠道获取了插件，且不了解其代码内容，**请不要使用** —— 它可能包含恶意逻辑，危及你的系统和数据安全。
+---
 
-## 目录
+## 📖 这是什么？
 
-- [已有插件](#已有插件)
-- [架构概览](#架构概览)
-- [快速开始：使用一个插件](#快速开始使用一个插件)
-- [插件开发指南](#插件开发指南)
-  - [目录结构](#目录结构)
-  - [plugin.json 规范](#pluginjson-规范)
-  - [通信协议](#通信协议)
-  - [方法处理器模板](#方法处理器模板)
-  - [响应格式](#响应格式)
-  - [错误处理](#错误处理)
-  - [公共工具模块](#公共工具模块)
-- [常见问题](#常见问题)
+`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端。
 
-## 已有插件
+这个项目提供了一套**完整的、可量产的固件底座**：
 
-| 插件 | 服务类型 | 说明 |
-|------|----------|------|
-| [fnos-smb-file-manager](./fnos-smb-file-manager/) | `file-manager` | FNOS SMB 文件管理 —— 列出文件、创建目录、删除文件/空目录 |
+- 通过 **加密 MQTT** 与 apex_mcp_bridge 智能体工具中枢通信
+- 将设备能力暴露为 **MCP (Model Context Protocol) 工具**
+- 内置 **事件驱动的指令执行引擎**，含多重安全防护
+- 附带 **同步/异步指令示例**，作为你开发自己模块的起点
 
-> 更多插件正在开发中。详见[项目路线图](#)。
+> **一句话承诺**：拷贝这个项目，写你的硬件 handler，注册上去——你的 ESP32 设备就立刻能被任何支持 MCP 协议的智能体应用控制。**更进一步：你不需要自己写 handler。** 框架的标准化模板与约束就是为此设计的——任何智能体都能替你生成 handler 代码。你只需要描述你的设备要做什么。
 
-## 架构概览
+---
 
-```
-┌──────────────────────────────┐
-│       apex-mcp-bridge         │  ← Rust 宿主，以 Docker 运行于 FNOS
-│  (插件自动发现)                 │
-├──────────────────────────────┤
-│       service_plugins/        │  ← 本仓库
-│  ┌──────────────────────────┐ │
-│  │  fnos-smb-file-manager/  │ │  ← 自包含插件
-│  │    plugin.json            │ │     • manifest（身份标识）
-│  │    requirements.txt       │ │     • methods（方法定义）
-│  │    *.py（处理器脚本）       │ │     • runtime（运行环境）
-│  └──────────────────────────┘ │     • config（私有配置）
-│  ┌──────────────────────────┐ │     • handler 脚本
-│  │  未来更多插件...           │ │
-│  └──────────────────────────┘ │
-└──────────────────────────────┘
-```
+## ✨ 核心能力
 
-**核心设计原则：**
+### 16 个核心框架模块
 
-1. **自包含** —— 每个插件是一个独立文件夹。拷贝即用。
-2. **声明式清单** —— `plugin.json` 是唯一真相来源：描述插件是什么、暴露哪些方法、参数长什么样、如何执行。
-3. **stdin/stdout 协议** —— bridge 启动处理器脚本后通过标准输入输出通信。没有共享内存、没有 RPC 框架、没有 import 耦合。
-4. **进程隔离** —— 每次方法调用启动全新 Python 进程。一个处理器崩溃不会影响 bridge 或其他插件。
-5. **配置自管** —— 插件私有配置（服务器地址、凭证等）放在插件自身的 `plugin.json` 中，由处理器直接读取。bridge 完全不需要了解这些。
-
-### 一次方法调用的完整流程
-
-```
-用户 (MCP) → bridge → 在 plugin.json 中发现方法
-                    → 启动: python3 <handler.py> <方法名>
-                    → 通过 stdin 写入参数 JSON
-                    → 通过 stdout 读取响应 JSON
-                    → 返回给用户
-```
-
-## 快速开始：使用一个插件
-
-1. 下载插件文件夹，拷贝到 bridge 的插件目录：
-
-   ```bash
-   cp -r fnos-smb-file-manager/ /path/to/apex-mcp-bridge/service_plugins/
-   ```
-
-   bridge 自动检测并动态加载，无需重启。
-
-   > 依赖安装是自动的 —— bridge 启动时会扫描所有 `requirements.txt` 并安装。
-
-2. **在管理界面中完成配置** —— 插件下载后为标准化出厂默认值。打开 `apex-mcp-bridge` 的插件管理页面进行调整：
-
-   | 你必须配置 | 说明 |
-   |---|---|
-   | **服务地址**（`serverUrl`） | 告诉插件目标服务跑在哪台服务器上。每个插件对接一个具体的服务端 —— 在这里填入对应的 IP 或主机名。 |
-   | **风险等级**（`risk_level`） | 插件各方法携带出厂默认的风险等级，但你的实际环境可能需要更严格的风控。将任意方法调整为 `normal`、`risk`、`auth` 或 `disable`。 |
-
-   其余配置项（端口、共享名、凭证等）因插件而异 —— 详见各插件自身的 README。
-
-3. 完成。通过 MCP 调用一次方法，验证连通性。
-
-## 插件开发指南
-
-### 目录结构
-
-每个插件遵循统一布局：
-
-```
-<插件名称>/
-├── plugin.json          # 清单文件 —— 唯一真相来源
-├── requirements.txt     # Python 依赖（pip install 格式）
-├── <公共模块>.py         # 公共工具（可选）
-├── <处理器_a>.py        # 方法处理器脚本
-├── <处理器_b>.py
-├── README.md            # 英文文档
-└── README_ZH.md         # 中文文档
-```
-
-- 文件夹名称即插件标识（如 `fnos-smb-file-manager`）。
-- 每个 `.py` 处理器对应 `plugin.json` 中的一个方法。
-
-### plugin.json 规范
-
-清单文件分为五个顶层区块：
-
-| 区块 | 用途 |
+| 模块 | 职责 |
 |------|------|
-| `manifest` | 插件身份：名称、版本、目标服务器地址 |
-| `info` | 人类可读的元信息：标题、描述、标签 |
-| `runtime` | 运行环境：解释器、工作目录 |
-| `methods` | 暴露的 MCP 方法：名称、参数、处理器、风险等级 |
-| `config` | 插件私有配置（服务器凭证等） |
+| `apex_core` | 框架总入口 & 事件总线 & 看门狗 |
+| `apex_event` | 全局事件循环（含粘性事件回溯机制） |
+| `apex_config` | 基于 NVS 的系统配置管理 |
+| `apex_network` | Wi-Fi AP+STA 双模 + 自动切换策略 |
+| `apex_mqtt` | MQTT 三通道通信（command/response/notify） |
+| `apex_crypto` | AES-CCM-128 加密 + 时间戳防重放 |
+| `apex_cmd_executor` | ⭐ **指令调度中枢**（框架核心） |
+| `apex_webserver` | 嵌入式 Web 配置门户 |
+| `apex_ota_update` | 双分区 OTA 无缝升级 |
+| `apex_power_down` / `apex_power_up` | 电源管理 |
+| `apex_reset` / `apex_restart` | 恢复出厂 / 重启 |
+| `apex_stop` | 强制停止持续动作 |
+| `apex_get_state` | 获取设备当前状态 |
+| `apex_notify` | 设备主动事件通知（JSON-RPC 2.0） |
 
-#### 完整 Schema
+### 5 重安全防护
 
-```jsonc
-{
-  // ── 插件身份 ──
-  "manifest": {
-    "name": "string",            // 唯一插件 ID，kebab-case 格式
-    "apiVersion": "plugin.gis/v1", // 协议版本
-    "kind": "Plugin",            // 固定值
-    "version": "1.0.0",         // 语义化版本
-    "serviceType": "string",     // 如 "file-manager"、"printer"、"report"
-    "disabled": false,           // 设为 true 可临时禁用
-    "serverUrl": "string"        // 目标服务 IP（管理员可修改）
-  },
+| 机制 | 触发条件 | 行为 |
+|------|---------|------|
+| **指令去重** | 同一 `msg_id` 2 秒内重复到达 | 拒收（`APEX_ERR_DUPLICATE`） |
+| **熔断降级** | 连续失败 ≥ 5 次 | 该指令被熔断 5 分钟（`APEX_ERR_DEGRADED`） |
+| **防重放** | 时间戳超出 ±30 秒窗口 | 拒收 + 记录日志 |
+| **看门狗** | handler 执行超过 30 秒 | 设备自动复位 |
+| **权限分级** | 无权限指令调用 | 拒收 |
 
-  // ── 展示元信息 ──
-  "info": {
-    "title": "string",           // 人类可读的名称
-    "description": "string",     // 一段话简介
-    "tags": ["string", "..."]    // 用于发现和筛选
-  },
+### 示例模块
 
-  // ── 运行环境 ──
-  "runtime": {
-    "interpreter": "python3",    // 固定值 —— 所有处理器均为 Python
-    "workDir": "./service_plugins/<插件名称>",
-    "defaultTimeout": 30         // 秒
-  },
+| 模块 | 类型 | 说明 |
+|------|------|------|
+| `sync_add` | 同步 | 接收两个整数，立即返回加法结果 |
+| `async_add` | 异步 | 接收两个整数，延迟 100 秒后返回结果（模拟耗时操作） |
 
-  // ── 方法定义 ──
-  "methods": [
-    {
-      "name": "string",          // MCP 方法名，用点号分隔
-      "description": "string",   // 一句话描述功能
-      "inputSchema": {           // 参数的 JSON Schema
-        "type": "object",
-        "properties": { /* ... */ },
-        "required": ["..."]
-      },
-      "handler": "script.py",    // 相对于插件根目录
-      "mode": "sync",            // 固定值 —— 所有方法均为同步
-      "timeout": 30,             // 秒，单次调用超时
-      "risk_level": "normal"     // "normal" | "risk" | "auth" | "disable"
-    }
-  ],
+### 🤖 AI 就绪：模板驱动的代码生成
 
-  // ── 插件配置 ──
-  "config": {
-    // 插件自定义键值对
-    // 由处理器直接读取 —— bridge 不关心内容
-  }
-}
-```
+这个框架的真正威力在于：**你不需要自己写代码**。因为：
 
-#### 方法 `risk_level` 说明
+- **通信层**（WiFi、MQTT、AES-CCM 加密）已经完整内置
+- **控制层**（指令调度、事件总线、安全机制）已经完整内置
+- **模板约束**（handler 注册模式、参数 schema）已经标准化
 
-控制 AI Agent 执行该方法时的风控规则：
-
-| 级别 | 行为 |
-|------|------|
-| `normal` | 直接放行。记录到调用审计日志，无特殊标记。 |
-| `risk` | 直接放行，但在审计日志中**醒目标记**，便于事后审查。 |
-| `auth` | **HITL（Human In The Loop）** —— Agent 暂停执行，必须由指定授权人批准后才能继续。 |
-| `disable` | **禁用**该功能。标准插件中用户不需要的方法可直接关闭，Agent 调用时将收到"功能已禁用"响应。 |
-
-#### 方法 `name` 命名规范
-
-使用点号分隔的层级命名：
+任何支持 MCP 协议的智能体都能在这些约束范围内生成可用的 handler。你只需要描述设备该做什么：
 
 ```
-<领域>.<类别>.<动作>
-
-示例：
-  smb.file.list        —— SMB 领域，文件类别，列表操作
-  smb.file.mkdir
-  smb.file.delete
-  printer.job.submit   —— （未来）打印领域，任务类别
-  report.sales.weekly  —— （未来）报表领域，销售类别
+"做一个 LED 闪烁的 handler，参数是 GPIO 引脚号和闪烁间隔毫秒数"
 ```
 
-### 通信协议
+智能体会自动生成 `apex_cmd_handler_t` 结构体、`json_schema`
+以及执行函数——完全匹配框架的契约。
+注册、编译，你的设备就获得了新能力。
 
-bridge 与每个处理器之间通过 **stdin / stdout** 通信。除了方法名外，不通过命令行参数传参。
+---
 
-#### Bridge → 处理器
+## 🏗️ 架构
 
-```
-命令:     python3 <handler.py> <方法名>
-
-stdin:    {"param1": "value1", "param2": "value2"}
-```
-
-- `sys.argv[1]` —— 方法名（如 `"smb.file.list"`）。用于日志或分发。
-- `sys.stdin` —— 完整的参数对象，单行 JSON 字符串，格式匹配方法的 `inputSchema`。
-
-#### 处理器 → Bridge
+### 分层设计
 
 ```
-stdout:   {"code": 0, "msg": "ok", "data": { ... }}
+┌──────────────────────────────────────────┐
+│                  main.c                   │  ← 程序入口
+├──────────────────────────────────────────┤
+│              apex_frame/                  │  ← 核心层（16 个模块）
+│  ┌────────────────────────────────────┐  │
+│  │  apex_cmd_executor                 │  │  ← 指令调度中枢
+│  │  ┌──────────────────────────────┐  │  │
+│  │  │ 解密 → 去重 → 匹配 → 锁定    │  │  │
+│  │  │ → 熔断检查 → 执行 → 加密回传 │  │  │
+│  │  └──────────────────────────────┘  │  │
+│  │  ┌──────────────────────────────┐  │  │
+│  │  │ 内置指令：                     │  │  │
+│  │  │ getInfo│otaUpdate│getState    │  │  │
+│  │  │ stop│powerDown│powerUp       │  │  │
+│  │  │ reSet│reStart                │  │  │
+│  │  └──────────────────────────────┘  │  │
+│  └────────────────────────────────────┘  │
+├──────────────────────────────────────────┤
+│             components/                   │  ← 应用层
+│  sync_add / async_add                     │     你的自定义模块放这里
+├──────────────────────────────────────────┤
+│              common/                      │  ← 基础层
+│  utils (UUID、加密工具、HTTP、JSON)       │
+└──────────────────────────────────────────┘
 ```
 
-- `code`=`0` → 成功，bridge 将 `data` 返回给调用方。
-- `code`=`-1` → 失败，bridge 将 `msg` 作为错误描述返回。
-- stdout **必须且只能有一行** —— 就是这条 JSON 响应。
-- 调试/错误日志输出到 `stderr`，绝对不要输出到 stdout。
+### 数据流
 
-#### 为什么用 stdin/stdout 而非 CLI 参数？
-
-1. **支持任意复杂参数** —— stdin 上的 JSON 可以承载嵌套对象、数组、大数据量，不受 shell 转义限制。
-2. **配置隔离** —— bridge 只传入方法参数。插件私有配置（服务器地址、凭证）由处理器直接从 `plugin.json` 读取，bridge 不接触。
-3. **简单统一** —— 所有插件一套协议，不用记参数位置顺序。
-
-### 方法处理器模板
-
-```python
-#!/usr/bin/env python3
-"""
-<handler>.py —— <简要说明>
-"""
-import sys
-import json
-import traceback
-from <公共模块> import output_json
-
-
-def main():
-    # 1. 获取方法名
-    method_name = sys.argv[1] if len(sys.argv) > 1 else "unknown"
-
-    # 2. 从 stdin 读取参数
-    raw = sys.stdin.read().strip()
-    try:
-        params = json.loads(raw) if raw else {}
-    except json.JSONDecodeError:
-        print(f"[{method_name}] 参数 JSON 格式无效: {raw[:200]}", file=sys.stderr)
-        sys.exit(1)
-
-    # 3. 校验必填参数
-    required_param = params.get("required_param")
-    if not required_param:
-        output_json(-1, "缺少必填参数: required_param")
-
-    # 4. 业务逻辑
-    try:
-        # ... 执行业务操作 ...
-        result = {"key": "value"}
-        output_json(0, "ok", result)
-    except Exception as e:
-        traceback.print_exc(file=sys.stderr)
-        output_json(-1, str(e))
-
-
-if __name__ == "__main__":
-    main()
+```
+AI 智能体 (MCP Client)
+    │ tools/call
+    ▼
+apex_mcp_bridge 智能体工具中枢
+    │ AES-CCM 加密 MQTT → apex/{device_id}/command
+    ▼
+ESP32-S3
+    │ Base64 解码 → AES-CCM 解密 → JSON 解析
+    ▼
+apex_cmd_executor
+    │ 去重 → 匹配 → 锁定 → 熔断检查 → 调用 handler
+    ▼
+你的 Handler (sync_add / async_add / 自定义模块)
+    │ 返回 APEX_OK / APEX_ASYNC_OK / 错误码
+    ▼
+加密 → MQTT → apex/{device_id}/response
+    │
+    ▼
+apex_mcp_bridge → MCP 响应 → AI 智能体
 ```
 
-### 响应格式
+---
 
-每个处理器必须向 stdout 输出唯一一个 JSON 对象：
+## 🚀 快速开始
+
+### 前置条件
+
+- [ESP-IDF v6.X](https://docs.espressif.com/projects/esp-idf/)
+- 一块 ESP32-S3 开发板
+
+### 编译 & 烧录
+
+```bash
+cd apex-esp32-s3-v6-basic
+idf.py set-target esp32s3
+idf.py build
+idf.py -p COM3 flash monitor
+```
+
+> 将 `COM3` 替换为你的串口号（Windows: `COM3`，Linux: `/dev/ttyUSB0`，macOS: `/dev/cu.usbserial-*`）。
+
+### 首次配网
+
+1. 设备上电后自动开启 AP 热点 **`APEX-XXXX`**（密码：`12345678`）
+2. 手机连接该热点
+3. 浏览器打开 `http://192.168.4.1`
+4. 配置你的 WiFi 名称、密码，以及 apex_mcp_bridge 智能体工具中枢地址
+5. 设备重启后自动连接路由器，5 分钟后 AP ��动关闭
+
+---
+
+## 📋 内置指令
+
+以下指令在框架初始化时自动注册：
+
+| `cmd_key` | 功能 | 描述 | `flags` |
+|-----------|------|------|---------|
+| `getInfo` | 获取设备信息 | 返回能力清单（MCP `tools/list`） | `ALWAYS_ALLOWED` |
+| `getState` | 获取状态 | 返回当前设备状态和运行中指令 | `ALWAYS_ALLOWED` |
+| `otaUpdate` | OTA 升级 | 触发远程固件升级 | `EXCLUSIVE` |
+| `stop` | 停止 | 强制停止持续动作 | `FORCE` |
+| `powerDown` | 关机 | 关闭设备 | `FORCE` |
+| `powerUp` | 开机 | 唤醒设备 | `ALWAYS_ALLOWED` |
+| `reSet` | 恢复出厂 | 重置所有配置 | `FORCE` |
+| `reStart` | 重启 | 重启设备 | `FORCE` |
+
+### 示例：`getInfo` 的响应
+
+当 AI 智能体调用 `tools/list` 时，中控会向设备查询 `getInfo`。框架会为所有已注册指令自动生成 JSON Schema：
 
 ```json
-// 成功
 {
-  "code": 0,
-  "msg": "ok",
-  "data": {
-    // 方法特定的返回数据。
-    // 可以是任意合法 JSON：对象、数组、字符串、数字、null。
-  }
-}
-
-// 失败
-{
-  "code": -1,
-  "msg": "人类可读的错误描述。",
-  "data": null
+  "tools": [
+    {
+      "name": "sync_add",
+      "description": "同步加法：接收两个参数，立即返回计算结果",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "add": { "type": "integer", "minimum": 0, "maximum": 100, "default": 50 },
+          "adder": { "type": "integer", "minimum": 0, "maximum": 200 }
+        },
+        "required": ["adder"]
+      }
+    }
+  ]
 }
 ```
 
-规则：
-- 失败时的 `msg` 必须具体、可操作（如 `"路径 'foo/bar' 不存在"`，而非 `"错误"`）。
-- 失败时的 `data` 必须为 `null`。
-- 调用 `json.dumps` 时使用 `ensure_ascii=False`，保留响应中的非 ASCII 字符。
+---
 
-### 错误处理
+## 🛠️ 开发你自己的指令
 
-- **顶层包裹** —— 在 `main()` 最外层用 `try / except` 包裹全部逻辑。
-- **绝不让脚本崩溃** —— 未捕获异常会导致 bridge 收不到有效 JSON，只能返回一个通用失败。
-- **日志走 stderr** —— 用 `traceback.print_exc(file=sys.stderr)` 输出完整堆栈；bridge 完全忽略 stderr。
-- **提前校验** —— 在任何副作用操作（网络调用、文件写入）之前检查必填参数。
+每个自定义模块遵循相同的三步模式：
 
-### 公共工具模块
+1. **定义参数** — 用 `function_param_desc_t`
+2. **实现 handler** — 同步 / 异步 / 持久化
+3. **注册** — 在 `init()` 中调用 `apex_cmd_register()`
 
-把通用逻辑提取到插件文件夹内的公共模块（如 `smb_utils.py`）：
+### 模式 A：同步 Handler（最常用）
 
-```python
-# smb_utils.py —— 示例结构
-import json, sys, os
+适用于瞬时操作：计算、状态查询、GPIO 简单控制。
 
-def output_json(code: int, msg: str, data=None):
-    """统一 JSON 响应输出。失败时自动退出。"""
-    print(json.dumps({"code": code, "msg": msg, "data": data},
-          ensure_ascii=False, default=str))
-    if code != 0:
-        sys.exit(1)
+```c
+#include "apex_cmd_executor.h"
 
-def load_plugin_config() -> dict:
-    """从脚本所在目录读取 plugin.json。"""
-    config_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "plugin.json"
-    )
-    with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+static const char *CMD_KEY = "my_led";
 
-def get_config_section(section: str) -> dict:
-    """获取 plugin.json 中指定区块的配置。"""
-    return load_plugin_config().get(section, {})
+static const function_param_desc_t params[] = {
+    {.key = "state", .type = "bool", .description = "LED 开关状态"},
+};
+
+static int led_handler(cJSON *params, const char *msg_id, cJSON **res_data)
+{
+    cJSON *state = cJSON_GetObjectItem(params, "state");
+    if (!cJSON_IsBool(state)) return APEX_ERR_PARAM;
+
+    gpio_set_level(LED_GPIO, state->valueint ? 1 : 0);
+
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddBoolToObject(data, "led", state->valueint);
+    *res_data = data;
+
+    return APEX_OK;  // 框架自动发响应 + 解锁
+}
+
+void my_led_init(void)
+{
+    static char schema[1024];
+    build_function_param_desc_json(params, 1, schema, sizeof(schema));
+
+    apex_cmd_entry_t entry = {
+        .cmd_key = CMD_KEY,
+        .function_name = "LED 控制",
+        .function_desc = "打开或关闭板载 LED 灯",
+        .function_params = schema,
+        .role = "user",
+        .version = "1.0.0",
+        .flags = APEX_CMD_FLAG_PARALLEL,
+        .handler = led_handler,
+    };
+    apex_cmd_register(entry);
+}
 ```
 
-要点：
-- 配置是从 `plugin.json` 中，**相对于脚本自身位置**（`os.path.dirname(__file__)`）读取的，保证插件完全可移植。
-- 如果频繁读取配置可以做缓存（每个处理器是短生命周期进程，缓存仅在一次调用内有效）。
+**生命周期：**
+```
+注册 → 收到指令 → 锁定槽位 → handler 返回 APEX_OK
+  → 框架自动发成功响应 + 解锁 → 结束
+```
 
-## 常见问题
+---
 
-<details>
-<summary><b>Q: bridge 如何发现插件？</b></summary>
+### 模式 B：异步 Handler
 
-启动时，bridge 扫描 `service_plugins/*/plugin.json`。每个包含合法 `plugin.json` 的文件夹会被注册为活跃插件。不合法的清单会被记录日志并跳过。
-</details>
+适用于耗时操作：OTA 升级、网络请求、传感器采样。
 
-<details>
-<summary><b>Q: 两个插件可以暴露同名方法吗？</b></summary>
+```c
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-不可以。`plugin.json` 中的方法名在所有插件之间必须全局唯一。bridge 以方法名作为路由的唯一键。
-</details>
+typedef struct {
+    int param;
+    char msg_id[48];  // ⚠️ 必须保存，用于 apex_cmd_finish()
+} my_ctx_t;
 
-<details>
-<summary><b>Q: 如何给已有插件增加新方法？</b></summary>
+static void async_task(void *arg)
+{
+    my_ctx_t *ctx = (my_ctx_t *)arg;
 
-1. 在插件文件夹内编写新的 `.py` 处理器脚本。
-2. 在 `plugin.json` 的 `methods` 数组中新增一条定义，`handler` 指向新脚本。
-3. bridge 在下次检测周期自动加载新方法。
-</details>
+    // ... 执行耗时操作 ...
+    vTaskDelay(pdMS_TO_TICKS(5000));
 
-<details>
-<summary><b>Q: 插件之间可以有依赖关系吗？</b></summary>
+    cJSON *data = cJSON_CreateObject();
+    cJSON_AddStringToObject(data, "status", "done");
+    apex_cmd_finish(ctx->msg_id, APEX_OK, data);  // 解锁 + 发响应
+    free(ctx);
+    vTaskDelete(NULL);
+}
 
-插件设计为独立、自包含。不支持插件间依赖 —— 如果两个服务需要交互，可以在一个插件上暴露更多方法，或引入第三个协调插件。
-</details>
+static int my_handler(cJSON *params, const char *msg_id, cJSON **res_data)
+{
+    my_ctx_t *ctx = calloc(1, sizeof(my_ctx_t));
+    strlcpy(ctx->msg_id, msg_id, sizeof(ctx->msg_id));
 
-<details>
-<summary><b>Q: 处理器超时会怎样？</b></summary>
+    xTaskCreate(async_task, "async", 4096, ctx, 5, NULL);
+    return APEX_ASYNC_OK;  // 框架维持锁定，发送 "processing"
+}
+```
 
-bridge 会终止 Python 进程并向调用方返回超时错误。每个方法定义中的 `timeout` 字段控制单次调用的超时限制。
-</details>
+**生命周期：**
+```
+注册 → 收到指令 → 锁定槽位 → handler 创建 FreeRTOS 任务 → 返回 APEX_ASYNC_OK
+  → 框架发 "processing（处理中）"（维持锁定）
+  → 后台任务完成 → 调用 apex_cmd_finish()
+  → 框架发完成响应 + 解锁
+```
+
+---
+
+### 模式 C：持久化动作（可停止）
+
+适用于需要显式停止的连续操作：电机转动、LED 呼吸灯、音频播放。
+
+```c
+static int motor_stop(cJSON *params, const char *msg_id, cJSON **res_data)
+{
+    motor_hardware_stop();
+    apex_cmd_finish(msg_id, APEX_OK, NULL);  // ⚠️ 停止回调中必须调用 finish
+    return APEX_OK;
+}
+
+static int motor_start(cJSON *params, const char *msg_id, cJSON **res_data)
+{
+    int speed = 50;
+    cJSON *s = cJSON_GetObjectItem(params, "speed");
+    if (cJSON_IsNumber(s)) speed = s->valueint;
+
+    motor_hardware_start(speed);
+    return APEX_OK;  // 持久化指令：返回 OK 后框架维持锁定
+}
+
+void motor_init(void)
+{
+    apex_cmd_entry_t entry = {
+        .cmd_key = "motorRun",
+        .function_name = "电机控制",
+        .function_desc = "启动电机持续运转，通过 stop 指令终止",
+        .function_params = "{\"speed\":{\"type\":\"integer\"}}",
+        .flags = APEX_CMD_FLAG_EXCLUSIVE,  // 独占模式
+        .handler = motor_start,
+        .is_persistent = true,              // ⚠️ 必须设为 true
+        .stop_handler = motor_stop,          // ⚠️ 必须提供停止回调
+    };
+    apex_cmd_register(entry);
+}
+```
+
+**生命周期：**
+```
+收到启动指令 → 锁定槽位 → handler 启动物理设备 → 返回 APEX_OK
+  → 框架发成功响应（维持锁定）→ 设备持续运行
+  → 收到 stop 指令 → 执行停止回调、关闭硬件
+  → 调用 apex_cmd_finish() 解锁 → 结束
+```
+
+---
+
+## 🔒 MQTT 三通道通信
+
+| 通道 | Topic | 方向 | 格式 |
+|------|-------|------|------|
+| **Command** | `apex/{device_id}/command` | 中控 → 设备 | JSON |
+| **Response** | `apex/{device_id}/response` | 设备 → 中控 | AES-CCM 加密 JSON |
+| **Notify** | `apex/{device_id}/notify` | 设备 → 中控 | JSON-RPC 2.0 Notification（加密） |
+
+> Command + Response 构成请求-响应对。Notify 是设备单向主动推送，适用于报警、状态变更等场景。
+
+---
+
+## 📂 项目结构
+
+```
+apex-esp32-s3-v6-basic/
+├── main/
+│   ├── main.c                    # 程序入口：初始化框架 → 注册模块
+│   └── CMakeLists.txt
+│
+├── apex_frame/                   # 核心框架层（请勿修改）
+│   ├── apex_core/                #   框架总入口 & 事件总线 & 看门狗
+│   ├── apex_event/               #   全局事件循环（粘性事件）
+│   ├── apex_config/              #   系统配置管理 (NVS)
+│   ├── apex_network/             #   Wi-Fi AP+STA 双模管理
+│   ├── apex_mqtt/                #   MQTT 客户端（三通道）
+│   ├── apex_crypto/              #   AES-CCM-128 加解密
+│   ├── apex_cmd_executor/        #   ⭐ 指令调度中枢
+│   ├── apex_webserver/           #   Web 配置门户
+│   ├── apex_ota_update/          #   OTA 固件升级
+│   ├── apex_power_down/          #   关机
+│   ├── apex_power_up/            #   开机
+│   ├── apex_reset/               #   恢复出厂
+│   ├── apex_restart/             #   重启
+│   ├── apex_stop/                #   强制停止持续动作
+│   ├── apex_get_state/           #   获取设备状态
+│   └── apex_notify/              #   设备事件通知
+│
+├── common/
+│   └── utils/                    # UUID、加密工具、HTTP、JSON 工具
+│
+├── components/                   # 你的模块放这里
+│   ├── sync_add/                 #   示例：同步指令
+│   └── async_add/                #   示例：异步指令
+│
+├── partitions.csv                # OTA 双分区布局
+├── sdkconfig                     # ESP-IDF 工程配置
+└── CMakeLists.txt                # 顶层 CMake
+```
+
+---
+
+## ⚙️ 默认配置
+
+| 配置项 | 默认值 |
+|--------|--------|
+| Wi-Fi STA SSID | `APEX_STA` |
+| Wi-Fi STA 密码 | `apex123` |
+| Wi-Fi AP SSID | `APEX-XXXX`（基于 MAC 动态生成） |
+| Wi-Fi AP 密码 | `12345678` |
+| MQTT Broker | `agent-plat.local:1883` |
+| 设备密码 | `apex123` |
+| Web 门户登录密码 | `12345678` |
+
+所有配置可通过 Web 门户（首次配网时访问 `http://192.168.4.1`，配网后通过设备 LAN IP 访问）进行修改。
+
+### 分区表
+
+| 分区名 | 大小 | 类型 | 用途 |
+|--------|------|------|------|
+| `nvs` | 128 KB | data | 配置存储 |
+| `otadata` | 8 KB | data | OTA 状态元数据 |
+| `phy_init` | 4 KB | data | PHY 校准 |
+| `ota_0` | 4 MB | app | 固件槽 A |
+| `ota_1` | 4 MB | app | 固件槽 B |
+| `storage` | 8 MB | spiffs | 文件存储 |
+
+---
+
+## 🧪 指令并发属性（Flags）
+
+每条指令必须选择以下标志之一：
+
+| 标志 | 行为 | 适用场景 |
+|------|------|---------|
+| `ALWAYS_ALLOWED` | 永不阻塞，任何状态可执行 | 只读查询（`getInfo`、`getState`） |
+| `PARALLEL` | 可与其他指令并行 | 无状态操作（`sync_add`） |
+| `EXCLUSIVE` | 锁定系统，独享执行 | 关键硬件操作（OTA、电机初始化） |
+| `FORCE` | 绕过一切，紧急优先 | 急停、重启、断电保护 |
+
+---
+
+## ✅ 新指令上线检查清单
+
+注册新指令前逐项核对：
+
+- [ ] `function_param_desc_t` 数组定义规范
+- [ ] 调用了 `build_function_param_desc_json()` 生成 JSON Schema
+- [ ] 参数的 KEY 宏定义与 handler 中的取值一一对应
+- [ ] `function_desc` 描述准确、简洁
+- [ ] `role` 权限配置正确（`"admin"` / `"user"`）
+- [ ] `flags` 匹配业务场景
+- [ ] 若 `is_persistent = true`：已实现 `stop_handler` 并在其中调用 `apex_cmd_finish()`
+- [ ] 异步任务：`msg_id` 已保存到上下文结构体，完成时传给 `apex_cmd_finish()`
+- [ ] `init()` 在 `main.c` 中 **`apex_cmd_executor_init()` 之后** 调用
+
+---
+
+## 📄 License
+
+[MIT](../LICENSE) © 2026 apex-freen
+
+---
+
+<p align="center">
+  <em>写一个 handler，注册一条指令，你的 AI 就多一个技能。</em>
+</p>
