@@ -19,7 +19,7 @@
   <a href="#-快速开始">快速开始</a> ·
   <a href="#-子项目">子项目</a> ·
   <a href="#-扩展性">扩展</a> ·
-  <a href="https://gitee.com/freen/apex-esp32-s3-v6">Gitee</a>
+  <a href="https://gitee.com/freen/apex-mcp-esp32-s3-v6">Gitee</a>
 </p>
 
 ---
@@ -30,7 +30,7 @@
 
 ## 📖 APEX 是什么？
 
-**APEX** 是一个开源的 **ESP32 智能体设备固件框架**，是 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态的硬件端基石，与 [service-plugins（插件框架）](https://gitee.com/freen/service-plugins) 共同构成完整的 AI 到硬件的技术栈。
+**APEX** 是一个开源的 **ESP32 智能体设备固件框架**，是 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态的硬件端基石，与 [apex-mcp-service-plugins（插件框架）](https://gitee.com/freen/apex-mcp-service-plugins) 共同构成完整的 AI 到硬件的技术栈。
 
 > 一句话：你只需专注做好自己的硬件产品，无需开发 App、无需搭建云端、无需理解 MCP 协议。**你甚至不需要自己动手写代码**——框架提供了标准化的模板与约束，只需向任何 MCP 智能体描述你的设备功能，智能体就能自动生成 handler 代码并注册，你的设备立刻就能被**任何支持 MCP 协议的智能体应用**控制，不限平台、不限模型。
 
@@ -140,14 +140,14 @@
 # 参考: https://docs.espressif.com/projects/esp-idf/
 
 # 克隆仓库
-git clone https://gitee.com/freen/apex-esp32-s3-v6.git
-cd apex-esp32-s3-v6
+git clone https://gitee.com/freen/apex-mcp-esp32-s3-v6.git
+cd apex-mcp-esp32-s3-v6
 ```
 
 ### 2. 选择一个子项目
 
 ```bash
-cd apex-esp32-s3-v6-basic      # 基础版（推荐入门）
+cd apex-mcp-esp32-s3-v6-basic      # 基础版（推荐入门）
 ```
 
 ### 3. 编译 & 烧录
@@ -167,8 +167,8 @@ idf.py -p PORT flash monitor
 ## 📂 项目结构
 
 ```
-apex-esp32-s3-v6/                    # 仓库根目录
-├── apex-esp32-s3-v6-basic/          # 子项目：基础参考实现
+apex-mcp-esp32-s3-v6/                    # 仓库根目录
+├── apex-mcp-esp32-s3-v6-basic/          # 子项目：基础参考实现
 │   ├── apex_frame/                  #   核心框架层（16 个模块）
 │   ├── components/                  #   业务示例（sync_add / async_add）
 │   ├── common/                      #   通用工具库
@@ -184,7 +184,7 @@ apex-esp32-s3-v6/                    # 仓库根目录
 
 | 子项目 | 定位 | 适合 |
 |--------|------|------|
-| [`apex-esp32-s3-v6-basic`](./apex-esp32-s3-v6-basic/) | 基础版 — 完整框架 + 同步/异步示例 | 入门学习 & 新项目起步 |
+| [`apex-mcp-esp32-s3-v6-basic`](./apex-mcp-esp32-s3-v6-basic/) | 基础版 — 完整框架 + 同步/异步示例 | 入门学习 & 新项目起步 |
 
 > 更多子项目（灯光控制、传感器采集、电机驱动等）正在开发中。
 
@@ -214,9 +214,9 @@ APEX 框架设计为 **芯片无关、平台无关**：
 | 项目 | 定位 | 仓库 |
 |------|------|------|
 | **apex_mcp_bridge** | 核心 — 智能体 ↔ 硬件网关 | [gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
-| **service-plugins** | 可扩展插件框架 | [gitee.com/freen/service-plugins](https://gitee.com/freen/service-plugins) |
-| **apex-esp32-s3-v6** | 底层硬件固件 — ESP32-S3（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
-| **apex-esp32-c3-v6** | 底层硬件固件 — ESP32-C3 | [gitee.com/freen/apex-esp32-c3-v6](https://gitee.com/freen/apex-esp32-c3-v6) |
+| **apex-mcp-service-plugins** | 可扩展插件框架 | [gitee.com/freen/apex-mcp-service-plugins](https://gitee.com/freen/apex-mcp-service-plugins) |
+| **apex-mcp-esp32-s3-v6** | 底层硬件固件 — ESP32-S3（本项目） | [gitee.com/freen/apex-mcp-esp32-s3-v6](https://gitee.com/freen/apex-mcp-esp32-s3-v6) |
+| **apex-mcp-esp32-c3-v6** | 底层硬件固件 — ESP32-C3 | [gitee.com/freen/apex-mcp-esp32-c3-v6](https://gitee.com/freen/apex-mcp-esp32-c3-v6) |
 
 ---
 

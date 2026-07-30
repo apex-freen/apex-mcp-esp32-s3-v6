@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
-<h1 align="center">apex-esp32-s3-v6-basic</h1>
+<h1 align="center">apex-mcp-esp32-s3-v6-basic</h1>
 
 <p align="center">
   <em>APEX 通用智能体设备框架 — ESP32-S3 基础参考实现<br>写一个 handler，注册一条指令，你的 AI 智能体就多一个技能。</em>
@@ -27,7 +27,7 @@
 
 ## 📖 这是什么？
 
-`apex-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，基于**最新 MCP 协议规范（2026 年 7 月）**构建，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端，与 [service-plugins（插件框架）](https://gitee.com/freen/service-plugins) 共同构成完整的 AI 到硬件的技术栈。
+`apex-mcp-esp32-s3-v6-basic` 是 APEX 通用智能体设备框架基于 **ESP32-S3** 的 **基础参考实现**，基于**最新 MCP 协议规范（2026 年 7 月）**构建，属于 [apex_mcp_bridge（智能体工具中枢）](https://gitee.com/freen/apex-mcp-bridge) 生态系统中的硬件端，与 [apex-mcp-service-plugins（插件框架）](https://gitee.com/freen/apex-mcp-service-plugins) 共同构成完整的 AI 到硬件的技术栈。
 
 这个项目提供了一套**完整的、可量产的固件底座**：
 
@@ -165,7 +165,7 @@ apex_mcp_bridge → MCP 响应 → AI 智能体
 ### 编译 & 烧录
 
 ```bash
-cd apex-esp32-s3-v6-basic
+cd apex-mcp-esp32-s3-v6-basic
 idf.py set-target esp32s3
 idf.py build
 idf.py -p COM3 flash monitor
@@ -395,7 +395,7 @@ void motor_init(void)
 ## 📂 项目结构
 
 ```
-apex-esp32-s3-v6-basic/
+apex-mcp-esp32-s3-v6-basic/
 ├── main/
 │   ├── main.c                    # 程序入口：初始化框架 → 注册模块
 │   └── CMakeLists.txt
@@ -495,9 +495,9 @@ apex-esp32-s3-v6-basic/
 | 项目 | 定位 | 仓库 |
 |------|------|------|
 | **apex_mcp_bridge** | 核心 — 智能体 ↔ 硬件网关 | [gitee.com/freen/apex-mcp-bridge](https://gitee.com/freen/apex-mcp-bridge) |
-| **service-plugins** | 可扩展插件框架 | [gitee.com/freen/service-plugins](https://gitee.com/freen/service-plugins) |
-| **apex-esp32-s3-v6** | 底层硬件固件 — ESP32-S3（本项目） | [gitee.com/freen/apex-esp32-s3-v6](https://gitee.com/freen/apex-esp32-s3-v6) |
-| **apex-esp32-c3-v6** | 底层硬件固件 — ESP32-C3 | [gitee.com/freen/apex-esp32-c3-v6](https://gitee.com/freen/apex-esp32-c3-v6) |
+| **apex-mcp-service-plugins** | 可扩展插件框架 | [gitee.com/freen/apex-mcp-service-plugins](https://gitee.com/freen/apex-mcp-service-plugins) |
+| **apex-mcp-esp32-s3-v6** | 底层硬件固件 — ESP32-S3（本项目） | [gitee.com/freen/apex-mcp-esp32-s3-v6](https://gitee.com/freen/apex-mcp-esp32-s3-v6) |
+| **apex-mcp-esp32-c3-v6** | 底层硬件固件 — ESP32-C3 | [gitee.com/freen/apex-mcp-esp32-c3-v6](https://gitee.com/freen/apex-mcp-esp32-c3-v6) |
 
 ---
 

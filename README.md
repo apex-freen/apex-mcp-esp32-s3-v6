@@ -19,7 +19,7 @@
   <a href="#-quick-start">Quick Start</a> ·
   <a href="#-sub-projects">Projects</a> ·
   <a href="#-extensibility">Extend</a> ·
-  <a href="https://github.com/apex-freen/apex-esp32-s3-v6">GitHub</a>
+  <a href="https://github.com/apex-freen/apex-mcp-esp32-s3-v6">GitHub</a>
 </p>
 
 ---
@@ -30,7 +30,7 @@
 
 ## 📖 What is APEX?
 
-**APEX** is an open-source **ESP32 agent-device firmware framework** — the hardware-side foundation of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem, working together with [service-plugins](https://github.com/apex-freen/service-plugins) to form the full AI-to-hardware stack.
+**APEX** is an open-source **ESP32 agent-device firmware framework** — the hardware-side foundation of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem, working together with [apex-mcp-service-plugins](https://github.com/apex-freen/apex-mcp-service-plugins) to form the full AI-to-hardware stack.
 
 > In short: build your hardware product. That's it. No apps. No cloud backends. No MCP protocol knowledge required. **You don't even need to write code yourself** — the framework provides standardized templates that constrain the structure. Just describe your device's behavior to any MCP-compatible AI agent, it can generate the handler code for you, register it, and your device is instantly controllable — no matter which platform or model you use.
 
@@ -140,14 +140,14 @@ You say "Turn on the living room light"
 # See: https://docs.espressif.com/projects/esp-idf/
 
 # Clone the repo
-git clone https://github.com/apex-freen/apex-esp32-s3-v6.git
-cd apex-esp32-s3-v6
+git clone https://github.com/apex-freen/apex-mcp-esp32-s3-v6.git
+cd apex-mcp-esp32-s3-v6
 ```
 
 ### 2. Pick a sub-project
 
 ```bash
-cd apex-esp32-s3-v6-basic      # Basic version (recommended starting point)
+cd apex-mcp-esp32-s3-v6-basic      # Basic version (recommended starting point)
 ```
 
 ### 3. Build & Flash
@@ -167,8 +167,8 @@ Power on the device. It automatically starts an AP hotspot `APEX-XXXX` (password
 ## 📂 Project Structure
 
 ```
-apex-esp32-s3-v6/                    # Repository root
-├── apex-esp32-s3-v6-basic/          # Sub-project: Basic reference implementation
+apex-mcp-esp32-s3-v6/                    # Repository root
+├── apex-mcp-esp32-s3-v6-basic/          # Sub-project: Basic reference implementation
 │   ├── apex_frame/                  #   Core framework layer (16 modules)
 │   ├── components/                  #   Example modules (sync_add / async_add)
 │   ├── common/                      #   Shared utilities
@@ -184,7 +184,7 @@ apex-esp32-s3-v6/                    # Repository root
 
 | Sub-project | Description | For |
 |-------------|-------------|-----|
-| [`apex-esp32-s3-v6-basic`](./apex-esp32-s3-v6-basic/) | Basic — full framework + sync/async examples | Learning & starting new projects |
+| [`apex-mcp-esp32-s3-v6-basic`](./apex-mcp-esp32-s3-v6-basic/) | Basic — full framework + sync/async examples | Learning & starting new projects |
 
 > More sub-projects (lighting control, sensor data collection, motor driver, etc.) are in development.
 
@@ -214,9 +214,9 @@ APEX is designed to be **chip-agnostic and platform-agnostic**:
 | Project | Role | Repo |
 |---------|------|------|
 | **apex_mcp_bridge** | Core — AI agent ↔ hardware gateway | [github.com/apex-freen/apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) |
-| **service-plugins** | Extensible plugin framework | [github.com/apex-freen/service-plugins](https://github.com/apex-freen/service-plugins) |
-| **apex-esp32-s3-v6** | Hardware firmware — ESP32-S3 (this repo) | [github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
-| **apex-esp32-c3-v6** | Hardware firmware — ESP32-C3 | [github.com/apex-freen/apex-esp32-c3-v6](https://github.com/apex-freen/apex-esp32-c3-v6) |
+| **apex-mcp-service-plugins** | Extensible plugin framework | [github.com/apex-freen/apex-mcp-service-plugins](https://github.com/apex-freen/apex-mcp-service-plugins) |
+| **apex-mcp-esp32-s3-v6** | Hardware firmware — ESP32-S3 (this repo) | [github.com/apex-freen/apex-mcp-esp32-s3-v6](https://github.com/apex-freen/apex-mcp-esp32-s3-v6) |
+| **apex-mcp-esp32-c3-v6** | Hardware firmware — ESP32-C3 | [github.com/apex-freen/apex-mcp-esp32-c3-v6](https://github.com/apex-freen/apex-mcp-esp32-c3-v6) |
 
 ---
 

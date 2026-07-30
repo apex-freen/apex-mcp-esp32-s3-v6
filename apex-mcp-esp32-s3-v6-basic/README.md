@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Protocol-MQTT%20%2B%20JSON--RPC%202.0-lightgrey.svg" alt="Protocol">
 </p>
 
-<h1 align="center">apex-esp32-s3-v6-basic</h1>
+<h1 align="center">apex-mcp-esp32-s3-v6-basic</h1>
 
 <p align="center">
   <em>The reference ESP32-S3 firmware for the APEX Universal Agent Device Framework.<br>Write a handler, expose a tool. Your AI agents get a new skill.</em>
@@ -26,7 +26,7 @@
 
 ## 📖 What is this?
 
-`apex-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**, built against the **latest MCP protocol specification (July 2026)**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — the hardware-side firmware layer, working with [service-plugins](https://github.com/apex-freen/service-plugins) to form the full AI-to-hardware stack.
+`apex-mcp-esp32-s3-v6-basic` is the **reference implementation** of the APEX device firmware framework for **ESP32-S3**, built against the **latest MCP protocol specification (July 2026)**. It is part of the [apex_mcp_bridge](https://github.com/apex-freen/apex-mcp-bridge) ecosystem — the hardware-side firmware layer, working with [apex-mcp-service-plugins](https://github.com/apex-freen/apex-mcp-service-plugins) to form the full AI-to-hardware stack.
 
 This project gives you a **complete, production-ready firmware base** that:
 
@@ -166,7 +166,7 @@ apex_mcp_bridge → MCP response → AI Agent
 ### Build & Flash
 
 ```bash
-cd apex-esp32-s3-v6-basic
+cd apex-mcp-esp32-s3-v6-basic
 idf.py set-target esp32s3
 idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
@@ -396,7 +396,7 @@ receive start → lock slot → handler starts motor → returns APEX_OK
 ## 📂 Project Structure
 
 ```
-apex-esp32-s3-v6-basic/
+apex-mcp-esp32-s3-v6-basic/
 ├── main/
 │   ├── main.c                    # Entry point: init framework → register modules
 │   └── CMakeLists.txt
@@ -498,9 +498,9 @@ This project is the **hardware firmware** layer. The full stack:
 | Project | Role | Repo |
 |---------|------|------|
 | **apex_mcp_bridge** | Core — AI agent ↔ hardware gateway | [github.com/apex-freen/apex-mcp-bridge](https://github.com/apex-freen/apex-mcp-bridge) |
-| **service-plugins** | Extensible plugin framework | [github.com/apex-freen/service-plugins](https://github.com/apex-freen/service-plugins) |
-| **apex-esp32-s3-v6** | Hardware firmware — ESP32-S3 (this repo) | [github.com/apex-freen/apex-esp32-s3-v6](https://github.com/apex-freen/apex-esp32-s3-v6) |
-| **apex-esp32-c3-v6** | Hardware firmware — ESP32-C3 | [github.com/apex-freen/apex-esp32-c3-v6](https://github.com/apex-freen/apex-esp32-c3-v6) |
+| **apex-mcp-service-plugins** | Extensible plugin framework | [github.com/apex-freen/apex-mcp-service-plugins](https://github.com/apex-freen/apex-mcp-service-plugins) |
+| **apex-mcp-esp32-s3-v6** | Hardware firmware — ESP32-S3 (this repo) | [github.com/apex-freen/apex-mcp-esp32-s3-v6](https://github.com/apex-freen/apex-mcp-esp32-s3-v6) |
+| **apex-mcp-esp32-c3-v6** | Hardware firmware — ESP32-C3 | [github.com/apex-freen/apex-mcp-esp32-c3-v6](https://github.com/apex-freen/apex-mcp-esp32-c3-v6) |
 
 ---
 
