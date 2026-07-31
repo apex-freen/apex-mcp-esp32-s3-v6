@@ -26,6 +26,7 @@ build/
 
 # ESP-IDF specific build outputs
 *.bin
+!apex-mcp-esp32-s3-v6_audio/apex-esp32-s3-v6_audio.bin
 *.elf
 *.map
 flasher_args.json # Generated in build directory
