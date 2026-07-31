@@ -55,7 +55,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         // 假设 g_apex_config.mqtt.host 存的是 "192.168.1.100"
         char *sync_url = malloc(128);
         snprintf(sync_url, 128, "http://%s:%d/openSys/time/sync",
-                 g_apex_config.mqtt.broker_addr, 80); // 端口改为 Rust 的 HTTP 端口
+                 g_apex_config.mqtt.broker_addr, 8018); // 端口改为 Rust 的 HTTP 端口
 
         xTaskCreate(apex_http_time_sync_task, "time_sync_task", 4096, sync_url, 5, NULL);
         break;
