@@ -29,6 +29,7 @@ static esp_mqtt_client_handle_t s_mqtt_client = NULL;
 static bool s_is_mqtt_connected = false;
 static uint32_t s_reconnect_delay_ms = 1000;
 static const uint32_t s_max_reconnect_delay_ms = 60000;
+static int s_mqtt_out_size = 8192;
 
 // --- 步骤 1：处理 MQTT 原生事件 ---
 void apex_http_time_sync_task(void *pvParameters);
@@ -120,7 +121,7 @@ static void start_mqtt_client(void)
         },
         .buffer = {
             .size = 4096,     // 接收缓冲区大小（默认1024）
-            .out_size = 4096, // 发送缓冲区大小（可选，默认等于size）
+            .out_size = 8192, // 发送缓冲区大小（可选，默认等于size）
         },
         .credentials = {
             .client_id = g_apex_config.mqtt.client_id,
@@ -216,6 +217,11 @@ esp_err_t apex_mqtt_subscribe(const char *topic, int qos)
     }
     int msg_id = esp_mqtt_client_subscribe(s_mqtt_client, topic, qos);
     return msg_id >= 0 ? ESP_OK : ESP_FAIL;
+}
+
+int apex_mqtt_get_out_size(void)
+{
+    return s_mqtt_out_size;
 }
 
 bool mqtt_topics_init(void)

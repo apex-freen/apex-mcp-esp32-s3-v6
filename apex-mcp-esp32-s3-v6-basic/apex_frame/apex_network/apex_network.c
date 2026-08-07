@@ -165,6 +165,7 @@ static void network_fsm_task(void *pv)
         if (bits & INTERNAL_BIT_GOT_IP)
         {
             ESP_LOGI(TAG, "已连接！开始 300 秒 AP 关闭倒计时");
+            // esp_wifi_set_ps(WIFI_PS_NONE); // 关 WiFi 省电，消除 m f null 告警
             apex_event_send(APEX_EVENT_NET_CONNECTED, NULL, 0);
 
             // 状态切换：停止断网相关的定时器，启动在线定时器

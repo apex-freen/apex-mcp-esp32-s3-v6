@@ -251,11 +251,21 @@ void apex_cmd_send_response(const char *func_key, const char *msg_id, int status
             {
                 const mqtt_topics_t *topics = mqtt_topics_get();
                 ESP_LOGI(TAG, "payload_crypto_encrypt OK");
-                // ✅ 正确做法：显式传递加密后的真实长度 out_len
-                // 并补齐 qos 和 retain 参数（根据函数定义）
-                apex_mqtt_publish(topics->response, (const char *)out_buf, (int)out_len, 1, 0);
+                ESP_LOGI(TAG, "明文响应(前200字): %.200s, 加密后=%d字节", reply_plain, (int)out_len);
 
-                ESP_LOGD(TAG, "加密报文已发出，总长度: %d 字节", out_len);
+                int mqtt_max = apex_mqtt_get_out_size() - 1024; // 留 1KB 给 MQTT header
+                if (mqtt_max < 0)
+                    mqtt_max = 4096;
+                if (out_len > (size_t)mqtt_max)
+                {
+                    ESP_LOGE(TAG, "加密报文过长 (%d > %d), 拒绝发送，请精简响应数据",
+                             (int)out_len, mqtt_max);
+                }
+                else
+                {
+                    apex_mqtt_publish(topics->response, (const char *)out_buf, (int)out_len, 0, 0);
+                    ESP_LOGD(TAG, "加密报文已发出，总长度: %d 字节", out_len);
+                }
             }
             free(out_buf);
         }

@@ -12,17 +12,21 @@ typedef struct
 
 /**
  * @brief 初始化 MQTT 模块
- * @note 内部会自动订阅 APEX_EVENT_NET_CONNECTED 等网络事件
  */
 esp_err_t apex_mqtt_init(void);
 
 /**
- * @brief 发布消息的通用接口
+ * @brief 获取 MQTT 发送缓冲区大小（用于超长报文截断判断）
+ */
+int apex_mqtt_get_out_size(void);
+
+/**
+ * @brief 发布消息
  */
 esp_err_t apex_mqtt_publish(const char *topic, const char *payload, int len, int qos, int retain);
 
 /**
- * @brief 订阅主题的通用接口
+ * @brief 订阅主题
  */
 esp_err_t apex_mqtt_subscribe(const char *topic, int qos);
 
