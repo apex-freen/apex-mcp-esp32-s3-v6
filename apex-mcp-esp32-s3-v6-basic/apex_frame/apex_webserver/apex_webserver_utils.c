@@ -66,7 +66,8 @@ esp_err_t param_parser_get_value(const char *content, const char *key,
 
         if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0)
         {
-            char tmp[256] = {0};
+            // 有的字段值可能会比较长，比如 token 所以加长
+            char tmp[1024] = {0};
             size_t vlen = end - eq - 1;
             if (vlen >= sizeof(tmp))
                 vlen = sizeof(tmp) - 1;

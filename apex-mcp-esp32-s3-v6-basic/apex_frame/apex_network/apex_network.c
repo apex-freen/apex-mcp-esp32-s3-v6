@@ -120,14 +120,14 @@ static void reload_and_apply_wifi_config(void)
     strncpy((char *)esp_sta_cfg.sta.password, g_apex_config.wifi_sta.password, sizeof(esp_sta_cfg.sta.password));
     esp_wifi_set_config(WIFI_IF_STA, &esp_sta_cfg);
 
-    // 目前 不计划 启动 AP配置 ，因为 首先 AP 不是主要服务， 过段时间会断开 ，即使有人知道密码连上， 还需要知道设备密码才能进入配置之后就是 多一个配置 ，用户学习成本会增加，而且还是一个消费级的设备。如果是工业或者要求高的，自然会有 更复杂的版本
-    // wifi_config_t esp_ap_cfg = {0};
-    // strncpy((char *)esp_ap_cfg.ap.ssid, g_apex_config.wifi_ap.ssid, sizeof(esp_ap_cfg.ap.ssid));
-    // strncpy((char *)esp_ap_cfg.ap.password, g_apex_config.wifi_ap.password, sizeof(esp_ap_cfg.ap.password));
-    // esp_ap_cfg.ap.channel = g_apex_config.wifi_ap.channel == 0 ? 1 : g_apex_config.wifi_ap.channel;
-    // esp_ap_cfg.ap.max_connection = 4;
-    // esp_ap_cfg.ap.authmode = strlen(g_apex_config.wifi_ap.password) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
-    // esp_wifi_set_config(WIFI_IF_AP, &esp_ap_cfg);
+    // 应用 AP 配置：固定 SSID 为 APEX_XXXXXX，覆盖 ESP-IDF 默认值和 WiFi NVS 历史缓存
+    wifi_config_t esp_ap_cfg = {0};
+    strncpy((char *)esp_ap_cfg.ap.ssid, g_apex_config.wifi_ap.ssid, sizeof(esp_ap_cfg.ap.ssid));
+    strncpy((char *)esp_ap_cfg.ap.password, g_apex_config.wifi_ap.password, sizeof(esp_ap_cfg.ap.password));
+    esp_ap_cfg.ap.channel = g_apex_config.wifi_ap.channel == 0 ? 1 : g_apex_config.wifi_ap.channel;
+    esp_ap_cfg.ap.max_connection = 4;
+    esp_ap_cfg.ap.authmode = strlen(g_apex_config.wifi_ap.password) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
+    esp_wifi_set_config(WIFI_IF_AP, &esp_ap_cfg);
 }
 
 // --- 步骤 3：核心状态机 Task (处理所有启停与超时逻辑) ---
