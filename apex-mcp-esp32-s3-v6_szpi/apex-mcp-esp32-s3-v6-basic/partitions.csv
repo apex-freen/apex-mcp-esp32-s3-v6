@@ -1,0 +1,10 @@
+# Name,   Type, SubType, Offset,  Size,     Flags
+# 基础系统数据,,,,,
+nvs,      data, nvs,     ,        0x20000,  
+otadata,  data, ota,     ,        0x2000,   
+phy_init, data, phy,     ,        0x1000,   
+# OTA 固件双区,,,,,
+ota_0,    app,  ota_0,   ,        0x400000, 
+ota_1,    app,  ota_1,   ,        0x400000, 
+# 业务层文件系统区,,,,,
+storage,  data, spiffs,  ,        0x7D0000,
