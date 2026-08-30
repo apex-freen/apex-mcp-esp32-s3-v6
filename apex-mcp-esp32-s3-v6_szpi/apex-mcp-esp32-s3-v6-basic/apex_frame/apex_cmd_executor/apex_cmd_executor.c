@@ -8,6 +8,7 @@
 #include "psa/crypto.h"
 #include "apex_mqtt.h"
 #include "apex_crypto.h"
+#include "apex_log.h"
 #include "esp_task_wdt.h"
 #include "apex_get_state.h"
 #include "apex_ota_update.h"
@@ -250,8 +251,9 @@ void apex_cmd_send_response(const char *func_key, const char *msg_id, int status
             if (payload_crypto_encrypt((uint8_t *)reply_plain, plaintext_len, out_buf, &out_len) == ESP_OK)
             {
                 const mqtt_topics_t *topics = mqtt_topics_get();
-                ESP_LOGI(TAG, "payload_crypto_encrypt OK");
-                ESP_LOGI(TAG, "明文响应(前200字): %.200s, 加密后=%d字节", reply_plain, (int)out_len);
+                // 联调日志：明文响应仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
+                APEX_LOG_PAYLOAD("OUTBOUND_PLAIN", reply_plain, plaintext_len);
+                ESP_LOGD(TAG, "响应加密完成, 密文长度: %d 字节", (int)out_len);
 
                 int mqtt_max = apex_mqtt_get_out_size() - 1024; // 留 1KB 给 MQTT header
                 if (mqtt_max < 0)
@@ -523,7 +525,9 @@ void apex_process_incoming_cmd(const char *b64_cipher_text, size_t b64_len)
         // ✅ 关键步骤：手动补上字符串结束符，确保 JSON 解析器不会越界
         decrypted_data[actual_plain_len] = '\0';
 
-        ESP_LOGI("CORE", "指令安全解密成功,内容:%s (长度: %d)，进入解析器...", decrypted_data, actual_plain_len);
+        ESP_LOGD("CORE", "指令安全解密成功 (长度: %d)", (int)actual_plain_len);
+        // 联调日志：入站指令明文仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
+        APEX_LOG_PAYLOAD("INBOUND_PLAIN", decrypted_data, actual_plain_len);
 
         // 3. 将解密后的明文交给指令解析器
         apex_cmd_executor((const char *)decrypted_data);

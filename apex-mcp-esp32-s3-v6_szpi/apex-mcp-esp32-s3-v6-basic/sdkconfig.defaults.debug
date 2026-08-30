@@ -1,0 +1,4 @@
+# sdkconfig.defaults.debug —— 开发/联调构建（明文日志开启，DEBUG 级别）
+# 用法: idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.debug" build
+CONFIG_APEX_DEBUG_PAYLOAD=y
+CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y

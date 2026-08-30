@@ -95,7 +95,8 @@ void apex_config_print(void)
 
     ESP_LOGI(TAG, "--- WiFi STA (连接路由器) ---");
     ESP_LOGI(TAG, "  SSID: [%s]", g_apex_config.wifi_sta.ssid);
-    ESP_LOGI(TAG, "  PASS: [%s]", g_apex_config.wifi_sta.password);
+    // 密码脱敏：仅打印是否已配置，不输出明文
+    ESP_LOGI(TAG, "  PASS: %s", g_apex_config.wifi_sta.password[0] ? "**** (已设置)" : "(空)");
     // 因为弃用了静态ip 所以下面的就不准确 不用了。
     // ESP_LOGI(TAG, "  IP: [%s]", g_apex_config.wifi_sta.ip_addr);
     // ESP_LOGI(TAG, "  GATEWAY: [%s]", g_apex_config.wifi_sta.gw_addr);
@@ -103,7 +104,7 @@ void apex_config_print(void)
 
     ESP_LOGI(TAG, "--- WiFi AP (设备热点) ---");
     ESP_LOGI(TAG, "  SSID: [%s]", g_apex_config.wifi_ap.ssid);
-    ESP_LOGI(TAG, "  PASS: [%s]", g_apex_config.wifi_ap.password);
+    ESP_LOGI(TAG, "  PASS: %s", g_apex_config.wifi_ap.password[0] ? "**** (已设置)" : "(空)");
     ESP_LOGI(TAG, "  CHANNEL: [%d]", g_apex_config.wifi_ap.channel);
     // ESP_LOGI(TAG, "  HOSTNAME: [%s]", g_apex_config.net_host_name); // 弃用
 
@@ -112,7 +113,8 @@ void apex_config_print(void)
     ESP_LOGI(TAG, "  ClientID: [%s]", g_apex_config.mqtt.client_id);
     // ESP_LOGI(TAG, "  USERNAME: [%s]", g_apex_config.mqtt.username);
     ESP_LOGI(TAG, "  USERNAME: [%s]", g_apex_config.device.device_name);
-    ESP_LOGI(TAG, "  PASSWORD: [%s]", g_apex_config.mqtt.password);
+    // 密码脱敏：仅打印是否已配置，不输出明文
+    ESP_LOGI(TAG, "  PASSWORD: %s", g_apex_config.mqtt.password[0] ? "**** (已设置)" : "(空)");
 
     ESP_LOGI(TAG, "--- DEVICE 配置 ---");
     ESP_LOGI(TAG, "  DEVICEID: [%s]", g_apex_config.device.device_id);

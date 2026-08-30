@@ -194,7 +194,10 @@ esp_err_t payload_crypto_decrypt(const uint8_t *payload, size_t payload_len,
     gettimeofday(&tv_now, NULL);
     uint64_t current_timestamp = (uint64_t)tv_now.tv_sec * 1000 + (tv_now.tv_usec / 1000);
 
-    ESP_LOGI("DEBUG", "本地时间: %llu, 收到时间: %llu", current_timestamp, received_timestamp);
+    // 防重放时间戳日志：仅联调构建（CONFIG_APEX_DEBUG_PAYLOAD=y）以 DEBUG 级别打印，量产裁剪
+#if CONFIG_APEX_DEBUG_PAYLOAD
+    ESP_LOGD("DEBUG", "本地时间: %llu, 收到时间: %llu", current_timestamp, received_timestamp);
+#endif
 
     // 如果系统时间未同步，此处逻辑可能误判，建议增加系统时间有效性标志判断
     if (current_timestamp > received_timestamp + 30000 ||

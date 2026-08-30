@@ -271,7 +271,7 @@ static esp_err_t do_login_handler(httpd_req_t *req)
         char cookie_header[64];
         snprintf(cookie_header, sizeof(cookie_header),
                  "session=%s; Path=/; HttpOnly", token_hex);
-        ESP_LOGI(TAG, "密码验证成功，设置 Cookie: %s", cookie_header);
+        ESP_LOGI(TAG, "密码验证成功，会话已创建（Cookie 含会话 Token，不入日志）");
         httpd_resp_set_hdr(req, "Set-Cookie", cookie_header);
 
         return httpd_resp_send_redirect_compat(req, "/", 303);

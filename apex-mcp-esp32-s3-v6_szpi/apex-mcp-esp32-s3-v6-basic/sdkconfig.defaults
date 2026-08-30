@@ -1,0 +1,3 @@
+# sdkconfig.defaults —— 量产构建（明文日志关闭，编译期裁剪）
+CONFIG_APEX_DEBUG_PAYLOAD=n
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y

@@ -327,7 +327,7 @@ void apex_http_time_sync_task(void *pvParameters)
                 if (read_len > 0)
                 {
                     buffer[read_len] = '\0';
-                    ESP_LOGI(TAG, "成功获取原始 JSON: %s", buffer);
+                    ESP_LOGD(TAG, "时间同步响应: %s", buffer);
                     cJSON *root = cJSON_Parse(buffer);
                     if (root)
                     {

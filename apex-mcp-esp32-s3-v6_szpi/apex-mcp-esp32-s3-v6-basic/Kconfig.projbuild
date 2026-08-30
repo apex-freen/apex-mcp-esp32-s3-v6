@@ -1,0 +1,11 @@
+menu "APEX Debug"
+
+config APEX_DEBUG_PAYLOAD
+    bool "打印加解密明文（仅联调用）"
+    default n
+    help
+      开启后在 DEBUG 级别打印加解密前后的明文/密文，
+      用于与 apex_mcp_bridge 联调验证链路。
+      量产构建必须关闭（编译期裁剪，不参与代码生成）。
+
+endmenu
