@@ -838,13 +838,18 @@ static const httpd_uri_t uri_save_mqtt = {.uri = "/save-mqtt", .method = HTTP_PO
 // ============================================================================
 static httpd_handle_t g_server = NULL;
 
+httpd_handle_t apex_webserver_get_handle(void)
+{
+    return g_server;
+}
+
 esp_err_t web_server_start(void)
 {
     httpd_config_t c = HTTPD_DEFAULT_CONFIG();
     c.stack_size = 8192;
     c.server_port = 80;
     c.max_open_sockets = 4;
-    c.max_uri_handlers = 15;
+    c.max_uri_handlers = 20; // 预留外设端点（如 /snapshot.jpg）
 
     if (httpd_start(&g_server, &c) != ESP_OK)
     {

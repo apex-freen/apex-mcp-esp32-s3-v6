@@ -11,9 +11,9 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 
-#define LCD_CMD_BITS    8
-#define LCD_PARAM_BITS  8
-#define LCD_LEDC_CH     LEDC_CHANNEL_0
+#define LCD_CMD_BITS 8
+#define LCD_PARAM_BITS 8
+#define LCD_LEDC_CH LEDC_CHANNEL_0
 
 static esp_lcd_panel_handle_t s_panel = NULL;
 
@@ -118,6 +118,31 @@ void bsp_lcd_fill(uint16_t color)
         line[i] = color;
     for (int y = 0; y < BSP_LCD_V_RES; y++)
         esp_lcd_panel_draw_bitmap(s_panel, 0, y, BSP_LCD_H_RES, y + 1, line);
+    heap_caps_free(line);
+}
+
+void bsp_lcd_fill_rect(int x0, int y0, int x1, int y1, uint16_t color)
+{
+    if (s_panel == NULL || x1 <= x0 || y1 <= y0)
+        return;
+    // 限制在屏内
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < 0)
+        y0 = 0;
+    if (x1 > BSP_LCD_H_RES)
+        x1 = BSP_LCD_H_RES;
+    if (y1 > BSP_LCD_V_RES)
+        y1 = BSP_LCD_V_RES;
+
+    int w = x1 - x0;
+    uint16_t *line = (uint16_t *)heap_caps_malloc(w * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (line == NULL)
+        return;
+    for (int i = 0; i < w; i++)
+        line[i] = color;
+    for (int y = y0; y < y1; y++)
+        esp_lcd_panel_draw_bitmap(s_panel, x0, y, x1, y + 1, line);
     heap_caps_free(line);
 }
 

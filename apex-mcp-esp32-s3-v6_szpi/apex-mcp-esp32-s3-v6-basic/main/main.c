@@ -15,6 +15,7 @@
 #include "touch_app.h"
 #include "wifi_app.h"
 #include "lcd_app.h"
+#include "camera_app.h"
 
 static const char *TAG = "MAIN";
 void app_main(void)
@@ -40,6 +41,7 @@ void app_main(void)
     touch_app_init();
     wifi_app_init();
     lcd_app_init();
+    camera_app_init();
 
     async_add_init();
     sync_add_init();

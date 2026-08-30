@@ -162,7 +162,29 @@ AI 要播放音乐/显示图片，文件必须先到设备：
 - [x] **P1**（✅ 已实现）：keyGet / touchGet / wifiStatus / lcdShowText(英文)
   - 新增 bsp_pca9557 / bsp_lcd(ST7789) / bsp_touch(FT5x06) / bsp_key / bsp_font(5x7)
   - 依赖按 v6 组件名：esp_lcd esp_driver_spi esp_driver_ledc esp_lcd_touch_ft5x06
-- [ ] **P2**：lcdShowColor / lcdShowImage / lcdBacklight
-- [ ] **P3**：cameraCapture（HTTP 取图）—— 需在 web server 加 /snapshot.jpg 端点
+- [ ] **P2**（✅ 已实现）：lcdShowColor / lcdShowImage / lcdBacklight
+  - bsp_lcd 新增 bsp_lcd_fill_rect（区域填充，PSRAM 行缓冲）
+  - lcdShowImage 支持 checker/gradient/bars 三种生成图案（整屏 PSRAM 缓冲 150KB）
+- [ ] **P3**（✅ 已实现）：cameraCapture / cameraInfo + HTTP 取图
+  - bsp_camera（OV2640/GC0308，QVGA JPEG，帧缓冲 PSRAM，电源走 PCA9557）
+  - apex_webserver 新增 apex_webserver_get_handle()（平台层暴露 httpd，供外设挂端点）
+  - /snapshot.jpg 端点：浏览器/中控直接 GET 取图（决策 A 落地）
+  - cameraCapture 返回完整 URL（STA/AP IP 自适应）
 - [ ] **P4**：audioPlay(WAV) / audioRecord / volumeSet —— ⏸️ 延后
-- [ ] **P5**：cameraStream / wifiScan / 语音 / 人脸 / BLE —— 按需
+- [ ] **P5**（进行中）：
+  - [x] `cameraStream`（✅ MJPEG 流）：独立 httpd(8080) `/stream`（multipart/x-mixed-replace，~10fps）；`cameraStreamStart` 持久化 + stop；流运行中 cameraCapture 返回 BUSY；80 端口 webserver 不受阻塞
+  - [ ] `wifiScan`（三级策略，见下）：apex_network 加 `apex_wifi_scan(force)` 原子扫描窗口
+  - 已记录 backlog（后续按需）：`bleHidSend`(NimBLE 键盘) / `speechRec`(esp-sr 离线语音, 需评估 v6 兼容+模型分区) / `faceDetect`(esp-dl, 与 MCP 价值弱)
+
+### wifiScan 三级策略（设计定稿）
+
+```
+wifiScan {force: bool}
+已连接 STA:
+  force=false → 返回扫描缓存 + 当前连接信息（不断网，带 cached_at 时间戳）
+  force=true  → 原子扫描窗口: Pause状态机 → 记录AP上下文 → 阻塞扫描(1-2s,短暂断连)
+                → Resume → 原BSSID快速重连(秒级) → 更新缓存 → 返回结果
+未连接 STA:    直接实时扫描（无连接损失）→ 更新缓存
+```
+
+> 硬约束：ESP32 单射频，扫描期间物理上无法保持连接；"原子扫描窗口 + 自动快速重连"是业界标准解法。

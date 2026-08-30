@@ -10,6 +10,7 @@
 #include "bsp_touch.h"
 #include "bsp_key.h"
 #include "bsp_font.h"
+#include "bsp_camera.h"
 
 /**
  * @brief 板级支持包入口：初始化板载外设（I2C/IMU/SD/LCD/触摸/按键）

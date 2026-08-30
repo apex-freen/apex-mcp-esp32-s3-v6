@@ -21,9 +21,12 @@ esp_err_t bsp_board_init(void)
     if (bsp_key_init() != ESP_OK)
         ESP_LOGW(TAG, "按键初始化失败");
 
+    if (bsp_camera_init() != ESP_OK)
+        ESP_LOGW(TAG, "摄像头初始化失败 (拍照功能不可用)");
+
     if (bsp_sd_mount() != ESP_OK)
         ESP_LOGW(TAG, "SD 卡挂载失败 (文件功能不可用)");
 
-    ESP_LOGI(TAG, "板级外设初始化完成 (I2C/IMU/SD/LCD/触摸/按键)");
+    ESP_LOGI(TAG, "板级外设初始化完成 (I2C/IMU/SD/LCD/触摸/按键/摄像头)");
     return ESP_OK;
 }

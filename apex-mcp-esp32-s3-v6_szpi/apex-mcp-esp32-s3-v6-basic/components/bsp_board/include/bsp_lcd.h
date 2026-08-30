@@ -11,6 +11,9 @@ esp_err_t bsp_lcd_init(void);
 /** 整屏填充颜色 */
 void bsp_lcd_fill(uint16_t color);
 
+/** 区域填充颜色 [x0,y0] - [x1,y1]（含端点） */
+void bsp_lcd_fill_rect(int x0, int y0, int x1, int y1, uint16_t color);
+
 /** 绘制位图区域 [x0,y0] - [x1,y1]（含端点，RGB565） */
 void bsp_lcd_draw_bitmap(int x0, int y0, int x1, int y1, const uint16_t *data);
 
