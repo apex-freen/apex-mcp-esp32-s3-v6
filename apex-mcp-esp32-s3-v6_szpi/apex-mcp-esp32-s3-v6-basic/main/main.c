@@ -11,6 +11,10 @@
 #include "attitude_app.h"
 #include "sd_file_app.h"
 #include "led_app.h"
+#include "key_app.h"
+#include "touch_app.h"
+#include "wifi_app.h"
+#include "lcd_app.h"
 
 static const char *TAG = "MAIN";
 void app_main(void)
@@ -32,6 +36,10 @@ void app_main(void)
     attitude_app_init();
     sd_file_app_init();
     led_app_init();
+    key_app_init();
+    touch_app_init();
+    wifi_app_init();
+    lcd_app_init();
 
     async_add_init();
     sync_add_init();
