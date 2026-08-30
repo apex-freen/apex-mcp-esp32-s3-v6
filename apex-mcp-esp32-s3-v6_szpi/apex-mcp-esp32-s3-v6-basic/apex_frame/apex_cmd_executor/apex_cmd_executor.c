@@ -10,6 +10,10 @@
 #include "apex_crypto.h"
 #include "apex_log.h"
 #include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "esp_timer.h"
 #include "apex_get_state.h"
 #include "apex_ota_update.h"
 #include "apex_stop.h"
@@ -27,6 +31,26 @@ static int s_cmd_count = 0;
 static uint8_t s_crypto_tx_buf[APEX_CRYPTO_BUF_SIZE];    // 响应加密输出
 static uint8_t s_crypto_b64_buf[APEX_CRYPTO_BUF_SIZE];   // 入站 Base64 解码
 static uint8_t s_crypto_plain_buf[APEX_CRYPTO_BUF_SIZE]; // 入站解密明文
+
+// ==================== 命令执行队列（设计 M3：MQTT 回调只入队，worker 顺序执行） ====================
+// 队列深度 4×2KB = 8KB 内部 RAM（内存权衡，如紧张可降到 2）
+#define APEX_CMD_QUEUE_DEPTH 4    // 队列深度
+#define APEX_CMD_PAYLOAD_MAX 2048 // 单指令明文上限（超限直接拒收）
+typedef struct
+{
+    char payload[APEX_CMD_PAYLOAD_MAX];
+    size_t len;
+} cmd_msg_t;
+
+static cmd_msg_t s_cmd_queue_buf[APEX_CMD_QUEUE_DEPTH];
+static StaticQueue_t s_cmd_queue_ctrl;
+static QueueHandle_t s_cmd_queue = NULL;
+static TaskHandle_t s_cmd_worker_handle = NULL;
+
+// handler 单指令超时监控（超时后释放槽位并回 APEX_ERR_TIMEOUT，系统 TWDT 仍保留为最后防线）
+#define APEX_CMD_HANDLER_TIMEOUT_MS 10000
+static esp_timer_handle_t s_cmd_timeout_timer = NULL;
+static char s_timeout_msg_id[64]; // msg_id 副本（定时器回调用，单 worker 下无并发写）
 
 // 故障分级：失败计数 & 熔断降级 & 重复拦截
 #define FAULT_MAX_FAILURES 5             // 连续失败次数阈值
@@ -426,7 +450,7 @@ void apex_cmd_executor(const char *json_raw)
         }
     }
 
-    // 6. 执行业务逻辑
+    // 6. 执行业务逻辑（含单指令超时监控，设计 M3）
     cJSON *res_data = NULL;
     ESP_LOGI(TAG, "执行功能: %s [%s]  [%s]", entry->function_name, func_key, msg_id);
     if (entry->flags == APEX_CMD_FLAG_FORCE)
@@ -437,7 +461,28 @@ void apex_cmd_executor(const char *json_raw)
     {
         ESP_LOGI(TAG, "常驻开放指令: %s [%s]", entry->function_name, func_key);
     }
+
+    // 启动单指令超时监控
+    if (s_cmd_timeout_timer)
+    {
+        strlcpy(s_timeout_msg_id, msg_id, sizeof(s_timeout_msg_id));
+        esp_timer_start_once(s_cmd_timeout_timer, APEX_CMD_HANDLER_TIMEOUT_MS * 1000);
+    }
+
     int status_code = entry->handler(params_to_pass, msg_id, &res_data);
+
+    // 停止超时监控
+    if (s_cmd_timeout_timer)
+        esp_timer_stop(s_cmd_timeout_timer);
+
+    // 槽位已被超时定时器释放 → 丢弃迟到的完成响应
+    if (status_code >= 0 && !cmd_is_active(msg_id))
+    {
+        ESP_LOGW(TAG, "指令 [%s] 槽位已被超时释放, 忽略迟到的完成响应", func_key);
+        if (res_data)
+            cJSON_Delete(res_data);
+        goto cleanup;
+    }
 
     // 故障分级：记录错误 & 通知 & 超额熔断
     if (ft && status_code < 0 && status_code != APEX_ASYNC_OK)
@@ -549,14 +594,89 @@ void apex_process_incoming_cmd(const char *b64_cipher_text, size_t b64_len)
         // 联调日志：入站指令明文仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
         APEX_LOG_PAYLOAD("INBOUND_PLAIN", decrypted_data, actual_plain_len);
 
-        // 5. 将解密后的明文交给指令解析器
-        apex_cmd_executor((const char *)decrypted_data);
+        // 5. 投递到命令队列（设计 M3）：MQTT 回调只做解密+入队，worker 任务顺序执行
+        if (s_cmd_queue == NULL)
+        {
+            ESP_LOGE("CORE", "命令队列未初始化, 指令被丢弃");
+            return;
+        }
+        if (actual_plain_len >= sizeof(cmd_msg_t))
+        {
+            ESP_LOGE("CORE", "指令明文过长 (%d >= %d), 拒收", (int)actual_plain_len, (int)sizeof(cmd_msg_t));
+            return;
+        }
+        cmd_msg_t msg;
+        memcpy(msg.payload, decrypted_data, actual_plain_len);
+        msg.len = actual_plain_len;
+
+        // 非阻塞投递：队列满则丢弃（不阻塞 MQTT 收包）
+        if (xQueueSend(s_cmd_queue, &msg, 0) != pdTRUE)
+        {
+            ESP_LOGE("CORE", "命令队列已满, 指令被丢弃");
+        }
     }
     else
     {
         ESP_LOGE("CORE", "指令解密失败，可能存在重放攻击或 MAC 校验不匹配！");
     }
     // 静态缓冲，无需释放
+}
+
+// ==================== M3: 命令 worker 任务 & 单指令超时监控 ====================
+
+// 检查指定 msg_id 的槽位是否仍被占用
+static bool cmd_is_active(const char *msg_id)
+{
+    for (int i = 0; i < APEX_MAX_PARALLEL_CMDS; i++)
+    {
+        if (g_apex_state.active_cmds[i].in_use &&
+            strcmp(g_apex_state.active_cmds[i].msg_id, msg_id) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 单指令超时回调：handler 超过 APEX_CMD_HANDLER_TIMEOUT_MS 未返回时
+// 释放槽位、回 APEX_ERR_TIMEOUT 并通知服务端。
+// 注：worker 仍可能阻塞在该 handler 上，此时由系统 TWDT（30s）作最后防线。
+static void cmd_timeout_cb(void *arg)
+{
+    for (int i = 0; i < APEX_MAX_PARALLEL_CMDS; i++)
+    {
+        if (g_apex_state.active_cmds[i].in_use &&
+            strcmp(g_apex_state.active_cmds[i].msg_id, s_timeout_msg_id) == 0)
+        {
+            char cmd_key[32];
+            strlcpy(cmd_key, g_apex_state.active_cmds[i].cmd_key, sizeof(cmd_key));
+
+            ESP_LOGE(TAG, "指令 [%s] 执行超时 (>%d ms), 释放槽位", cmd_key, APEX_CMD_HANDLER_TIMEOUT_MS);
+            apex_state_unlock(s_timeout_msg_id);
+            apex_cmd_send_response(cmd_key, s_timeout_msg_id, APEX_ERR_TIMEOUT, NULL);
+
+            cJSON *nd = cJSON_CreateObject();
+            cJSON_AddStringToObject(nd, "reason", "handler_timeout");
+            cJSON_AddNumberToObject(nd, "timeout_ms", APEX_CMD_HANDLER_TIMEOUT_MS);
+            apex_cmd_send_notify(cmd_key, "command_timeout", nd);
+            return;
+        }
+    }
+    // 槽位已释放（指令正常完成），忽略迟到的超时回调
+}
+
+// worker 任务：从队列取指令，执行完整调度流水线（去重/匹配/锁定/熔断/执行/回传）
+static void cmd_worker_task(void *arg)
+{
+    cmd_msg_t msg;
+    while (1)
+    {
+        if (xQueueReceive(s_cmd_queue, &msg, portMAX_DELAY))
+        {
+            msg.payload[msg.len] = '\0';
+            apex_cmd_executor(msg.payload);
+        }
+    }
 }
 
 void apex_cmd_register(apex_cmd_entry_t entry)
@@ -717,6 +837,32 @@ esp_err_t apex_cmd_executor_init(void)
         .handler = apex_cmd_getinfo_handler};
     apex_cmd_register(info_cmd);
     ESP_LOGI(TAG, "加载 apex_cmd_executor_init 完成");
+
+    // ============================================================
+    // M3: 创建命令队列 + worker 任务 + 单指令超时监控
+    // MQTT 回调只负责"解密+入队"，handler 由 worker 顺序执行，避免阻塞收包
+    // ============================================================
+    s_cmd_queue = xQueueCreateStatic(APEX_CMD_QUEUE_DEPTH, sizeof(cmd_msg_t),
+                                     (uint8_t *)s_cmd_queue_buf, &s_cmd_queue_ctrl);
+    if (s_cmd_queue == NULL)
+    {
+        ESP_LOGE(TAG, "命令队列创建失败 (深度 %d, 消息 %d 字节)", APEX_CMD_QUEUE_DEPTH, (int)sizeof(cmd_msg_t));
+        return ESP_ERR_NO_MEM;
+    }
+    ESP_LOGI(TAG, "命令队列就绪: 深度 %d, 消息 %d 字节", APEX_CMD_QUEUE_DEPTH, (int)sizeof(cmd_msg_t));
+
+    // worker 绑定 Core1：与 MQTT 事件任务、应用任务（Core0）隔离（借鉴实战派双核流水线）
+    // 栈 10KB：需容纳 cmd_msg_t 局部副本(2KB) + 调度流水线 + handler 调用链
+    xTaskCreatePinnedToCore(cmd_worker_task, "apex_cmd_worker", 10240, NULL, 5,
+                            &s_cmd_worker_handle, 1);
+
+    const esp_timer_create_args_t timer_args = {
+        .callback = cmd_timeout_cb,
+        .arg = NULL, // 回调使用静态 s_timeout_msg_id
+        .name = "apex_cmd_timeout",
+    };
+    esp_timer_create(&timer_args, &s_cmd_timeout_timer);
+
     return ESP_OK;
 }
 

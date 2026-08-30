@@ -181,7 +181,7 @@ CONFIG_LOG_DEFAULT_LEVEL_WARN=y          # 生产日志级别（见设计 A）
 
 ## 五、设计 C：handler 独立执行任务模型（G3）
 
-### 5.1 目标拓扑（借鉴实战派"采集→队列→处理"双核流水线）
+### 5.1 目标拓扑（✅ M3 已实施：借鉴实战派"采集→队列→处理"双核流水线）
 
 ```
 MQTT 事件任务 (esp-mqtt 默认)
@@ -196,41 +196,46 @@ MQTT 事件任务 (esp-mqtt 默认)
 └─────────────────────────────────────┘
 ```
 
-- **MQTT 回调职责收窄**：解密 + 入队 + 返回（µs~ms 级），永不阻塞收包。
-- **worker 任务**：独立 8KB 栈，执行完整调度流水线（现 `apex_cmd_executor` 逻辑整体平移）。
-- **看门狗改造**：不再整机复位；worker 内对 handler 增加**单指令超时监控**（如 10s 无响应则回 `APEX_ERR_TIMEOUT` 并释放槽位）。
+- **MQTT 回调职责收窄**：解密 + 入队 + 返回（µs~ms 级），永不阻塞收包。✅
+- **worker 任务**：10KB 栈（容纳 2KB 消息副本 + 调度流水线 + handler 调用链），绑定 Core1。✅
+- **单指令超时监控**：handler 执行前 arm 10s esp_timer，超时后释放槽位、回 `APEX_ERR_TIMEOUT` 并 notify；系统 TWDT（30s）保留为最后防线。✅
 
-### 5.2 数据结构
+### 5.2 数据结构（✅ 已实施，队列深度按内存权衡定为 4）
 
 ```c
-// apex_cmd_worker.h
+// apex_cmd_executor.c 内
 typedef struct {
-    char payload[APEX_CMD_PAYLOAD_MAX]; // 解密后的明文拷贝（复用缓冲池）
+    char payload[APEX_CMD_PAYLOAD_MAX]; // 解密后的明文拷贝（静态队列，非复用缓冲池）
     size_t len;
 } cmd_msg_t;
 
-#define APEX_CMD_QUEUE_DEPTH 8   // 队列深度
-#define APEX_CMD_PAYLOAD_MAX 2048 // 单指令明文上限（超限直接拒收）
+#define APEX_CMD_QUEUE_DEPTH 4      // 深度 4（4×2KB=8KB 内部 RAM；原设计 8，权衡后降为 4）
+#define APEX_CMD_PAYLOAD_MAX 2048   // 单指令明文上限（超限直接拒收）
 ```
 
-### 5.3 并发策略映射（不改变现有 flags 语义）
+### 5.3 并发策略映射（⚠️ 实现为单 worker FIFO，如实说明限制）
 
 | flags | worker 行为 |
 | --- | --- |
-| PARALLEL | 进入公共 worker 队列，与已有非独占指令并发 |
-| EXCLUSIVE | 获取独占锁后才执行，期间 PARALLEL 排队 |
-| FORCE | 绕过排队，抢占执行（中断当前非持久化 handler） |
-| ALWAYS_ALLOWED | 任何时候直接执行（只读查询） |
+| PARALLEL | 进入公共 worker 队列，顺序执行 |
+| EXCLUSIVE | 获取独占锁后才执行（`apex_state_lock` 逻辑不变） |
+| FORCE | 仍能绕过 Busy 状态获取锁，但在单 worker FIFO 下**无法真正抢占**（排队等待） |
+| ALWAYS_ALLOWED | 随时可执行（只读查询） |
 
-### 5.4 兼容性
+> **限制**：单 worker 为顺序执行模型，handler 之间不并发；FORCE 的"抢占中断"需多 worker 才能实现，暂缓。handler 卡死时 worker 仍会被卡住（超时定时器已对外宣告并释放槽位，系统 TWDT 兜底复位）。
+
+### 5.4 兼容性（✅）
 
 - 保留 `apex_cmd_executor()` / `apex_process_incoming_cmd()` 对外接口签名不变（内部实现改为入队）。
-- 既有 8 个内置指令与 sync_add/async_add 示例无需改动，即可验证。
+- 既有 8 个内置指令与 sync_add/async_add 示例无需改动。
 
 ### 5.5 验证
 
-- 注册一个 `vTaskDelay(5000)` 的测试 handler，执行期间持续下发 getState，确认 getState 不被阻塞、MQTT 不丢包。
-- 恢复 14 中的固定核心思路：worker 绑 Core1，LVGL/摄像头类任务预留 Core0。
+- 注册一个 `vTaskDelay(5000)` 的测试 handler，执行期间持续下发指令，确认：
+  - **MQTT 收包不被阻塞**（连接保持、不重连、keepalive 正常）
+  - getState 在 5s 后正常返回（单 worker 串行，排队等待是预期行为）
+  - 队列满时打 `命令队列已满` ERROR 且不崩溃
+- 注册一个永不返回的 handler，确认 10s 后收到 `APEX_ERR_TIMEOUT` 响应 + `command_timeout` notify。
 
 ---
 
