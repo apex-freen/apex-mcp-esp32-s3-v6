@@ -21,6 +21,13 @@
 static apex_cmd_entry_t s_cmd_table[30]; // 预留30个功能位
 static int s_cmd_count = 0;
 
+// ==================== 加解密静态缓冲池（设计 M2：避免高频 malloc） ====================
+// 容量依据：MQTT 收缓冲 4096 → Base64 解码 ≤3072 → 明文 ≤3043 → 加密输出 ≤4096
+#define APEX_CRYPTO_BUF_SIZE 4096
+static uint8_t s_crypto_tx_buf[APEX_CRYPTO_BUF_SIZE];    // 响应加密输出
+static uint8_t s_crypto_b64_buf[APEX_CRYPTO_BUF_SIZE];   // 入站 Base64 解码
+static uint8_t s_crypto_plain_buf[APEX_CRYPTO_BUF_SIZE]; // 入站解密明文
+
 // 故障分级：失败计数 & 熔断降级 & 重复拦截
 #define FAULT_MAX_FAILURES 5             // 连续失败次数阈值
 #define FAULT_DEGRADE_MS (5 * 60 * 1000) // 降级恢复时间 (5分钟)
@@ -243,33 +250,33 @@ void apex_cmd_send_response(const char *func_key, const char *msg_id, int status
         // 计算所需空间：Nonce(13) + Timestamp(8) + Plaintext + MAC(16)
         size_t needed_size = 13 + 8 + plaintext_len + 16;
 
-        uint8_t *out_buf = (uint8_t *)malloc(needed_size);
+        uint8_t *out_buf = s_crypto_tx_buf; // 复用静态缓冲池，避免高频 malloc
         size_t out_len = 0;
 
-        if (out_buf)
+        if (needed_size > sizeof(s_crypto_tx_buf))
         {
-            if (payload_crypto_encrypt((uint8_t *)reply_plain, plaintext_len, out_buf, &out_len) == ESP_OK)
-            {
-                const mqtt_topics_t *topics = mqtt_topics_get();
-                // 联调日志：明文响应仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
-                APEX_LOG_PAYLOAD("OUTBOUND_PLAIN", reply_plain, plaintext_len);
-                ESP_LOGD(TAG, "响应加密完成, 密文长度: %d 字节", (int)out_len);
+            ESP_LOGE(TAG, "响应过大 (%d > %d), 拒绝发送", (int)needed_size, (int)sizeof(s_crypto_tx_buf));
+        }
+        else if (payload_crypto_encrypt((uint8_t *)reply_plain, plaintext_len, out_buf, &out_len) == ESP_OK)
+        {
+            const mqtt_topics_t *topics = mqtt_topics_get();
+            // 联调日志：明文响应仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
+            APEX_LOG_PAYLOAD("OUTBOUND_PLAIN", reply_plain, plaintext_len);
+            ESP_LOGD(TAG, "响应加密完成, 密文长度: %d 字节", (int)out_len);
 
-                int mqtt_max = apex_mqtt_get_out_size() - 1024; // 留 1KB 给 MQTT header
-                if (mqtt_max < 0)
-                    mqtt_max = 4096;
-                if (out_len > (size_t)mqtt_max)
-                {
-                    ESP_LOGE(TAG, "加密报文过长 (%d > %d), 拒绝发送，请精简响应数据",
-                             (int)out_len, mqtt_max);
-                }
-                else
-                {
-                    apex_mqtt_publish(topics->response, (const char *)out_buf, (int)out_len, 0, 0);
-                    ESP_LOGD(TAG, "加密报文已发出，总长度: %d 字节", out_len);
-                }
+            int mqtt_max = apex_mqtt_get_out_size() - 1024; // 留 1KB 给 MQTT header
+            if (mqtt_max < 0)
+                mqtt_max = 4096;
+            if (out_len > (size_t)mqtt_max)
+            {
+                ESP_LOGE(TAG, "加密报文过长 (%d > %d), 拒绝发送，请精简响应数据",
+                         (int)out_len, mqtt_max);
             }
-            free(out_buf);
+            else
+            {
+                apex_mqtt_publish(topics->response, (const char *)out_buf, (int)out_len, 0, 0);
+                ESP_LOGD(TAG, "加密报文已发出，总长度: %d 字节", out_len);
+            }
         }
         free(reply_plain);
     }
@@ -317,18 +324,22 @@ void apex_cmd_send_notify(const char *func_key, const char *event, cJSON *data)
     {
         size_t plaintext_len = strlen(notify_plain);
         size_t needed_size = 13 + 8 + plaintext_len + 16;
-        uint8_t *out_buf = (uint8_t *)malloc(needed_size);
-        size_t out_len = 0;
 
-        if (out_buf)
+        if (needed_size > sizeof(s_crypto_tx_buf))
         {
+            ESP_LOGE(TAG, "notify 报文过大 (%d > %d), 丢弃", (int)needed_size, (int)sizeof(s_crypto_tx_buf));
+        }
+        else
+        {
+            uint8_t *out_buf = s_crypto_tx_buf; // 复用静态缓冲池
+            size_t out_len = 0;
+
             if (payload_crypto_encrypt((uint8_t *)notify_plain, plaintext_len, out_buf, &out_len) == ESP_OK)
             {
                 const mqtt_topics_t *topics = mqtt_topics_get();
                 apex_mqtt_publish(topics->notice, (const char *)out_buf, (int)out_len, 1, 0);
                 ESP_LOGD(TAG, "notify 已 JSON-RPC 发布到 %s, 长度: %d", topics->notice, out_len);
             }
-            free(out_buf);
         }
         free(notify_plain);
     }
@@ -497,49 +508,55 @@ void apex_process_incoming_cmd(const char *b64_cipher_text, size_t b64_len)
     if (b64_cipher_text == NULL || b64_len == 0)
         return;
 
-    // 1. 准备 Base64 解码后的缓冲区
-    // Base64 解码后长度约为原长的 3/4，直接用 b64_len 长度肯定够
+    // 长度防护：超出静态缓冲池上限直接拒收
+    if (b64_len > sizeof(s_crypto_b64_buf))
+    {
+        ESP_LOGE("CORE", "指令报文过长 (%d > %d), 拒收", (int)b64_len, (int)sizeof(s_crypto_b64_buf));
+        return;
+    }
+
+    // 1. 复用静态缓冲池：Base64 解码（解码后长度 ≤ 原长 3/4）
     size_t decoded_len = 0;
-    uint8_t *binary_cipher = malloc(b64_len);
+    uint8_t *binary_cipher = s_crypto_b64_buf;
 
     // 2. Base64 解码：将字符串转回二进制
     int ret = mbedtls_base64_decode(binary_cipher, b64_len, &decoded_len,
                                     (const unsigned char *)b64_cipher_text, b64_len);
 
-    // ESP_LOGI("CORE", "Base64 解码成功,内容: %s", b64_cipher_text);
     if (ret != 0)
     {
         ESP_LOGE("CORE", "Base64 解码失败");
-        free(binary_cipher);
         return;
     }
 
-    // 3. 准备明文缓冲区
-    uint8_t *decrypted_data = (uint8_t *)calloc(1, decoded_len + 1);
+    // 3. 复用静态缓冲池：解密明文（+1 用于手动补 '\0'）
+    if (decoded_len + 1 > sizeof(s_crypto_plain_buf))
+    {
+        ESP_LOGE("CORE", "指令明文过大 (%d > %d), 拒收", (int)decoded_len, (int)sizeof(s_crypto_plain_buf));
+        return;
+    }
+    uint8_t *decrypted_data = s_crypto_plain_buf;
     size_t actual_plain_len = 0;
 
-    // 2. 调用 crypto 组件进行解密
+    // 4. 调用 crypto 组件进行解密
     // 传入 &actual_plain_len 让函数写回真实长度
     if (payload_crypto_decrypt(binary_cipher, decoded_len, decrypted_data, &actual_plain_len) == ESP_OK)
     {
-        // ✅ 关键步骤：手动补上字符串结束符，确保 JSON 解析器不会越界
+        // 关键步骤：静态缓冲可能残留旧数据，必须用实际长度截断并补结束符
         decrypted_data[actual_plain_len] = '\0';
 
         ESP_LOGD("CORE", "指令安全解密成功 (长度: %d)", (int)actual_plain_len);
         // 联调日志：入站指令明文仅在 CONFIG_APEX_DEBUG_PAYLOAD=y 时打印
         APEX_LOG_PAYLOAD("INBOUND_PLAIN", decrypted_data, actual_plain_len);
 
-        // 3. 将解密后的明文交给指令解析器
+        // 5. 将解密后的明文交给指令解析器
         apex_cmd_executor((const char *)decrypted_data);
     }
     else
     {
         ESP_LOGE("CORE", "指令解密失败，可能存在重放攻击或 MAC 校验不匹配！");
     }
-
-    // 4. 释放内存
-    free(binary_cipher);
-    free(decrypted_data);
+    // 静态缓冲，无需释放
 }
 
 void apex_cmd_register(apex_cmd_entry_t entry)

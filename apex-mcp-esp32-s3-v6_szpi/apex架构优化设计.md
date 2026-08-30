@@ -151,26 +151,31 @@ CONFIG_LOG_DEFAULT_LEVEL_WARN=y          # 生产日志级别（见设计 A）
 
 ### 4.2 缓冲规划表（显式内存策略）
 
-| 缓冲 | 现状 | 设计 | 分配方式 |
-| --- | --- | --- | --- |
-| MQTT 收包缓冲 | esp-mqtt 默认 | 静态 4KB 环形缓冲（command 报文） | 静态数组（内部 RAM） |
-| MQTT 发送缓冲 | `apex_mqtt_get_out_size()` 动态 | 固定 4KB + 报文超限前置检查 | 静态数组 |
-| 加解密缓冲 | 每次 malloc | **复用静态缓冲池**（2 份：enc/dec） | 静态数组 |
-| 命令队列 | 无 | 固定容量结构体池（见设计 C） | 静态数组 |
-| cJSON 大对象 | 内部 RAM | 仅超大响应（>2KB）可 `cJSON_InitHooks` 指向 PSRAM | 按需 |
+> ✅ = M2 已实施；⏸️ = 决策后暂缓
 
-> 原则：**小对象/高频对象留内部 RAM，大块/一次性对象进 PSRAM**。cJSON 小对象不塞 PSRAM（访问慢）。
+| 缓冲 | 现状 | 设计 | 分配方式 | 状态 |
+| --- | --- | --- | --- | --- |
+| MQTT 收包缓冲 | `buffer.size=4096` 显式配置 | 维持显式配置即可 | esp-mqtt 内部 | ✅ 达标 |
+| MQTT 发送缓冲 | `buffer.out_size=8192` 显式配置 | 维持显式配置 + 超限前置检查（executor 已有） | esp-mqtt 内部 | ✅ 达标 |
+| 加解密缓冲 | 每次 malloc | **复用静态缓冲池**（tx/b64/plain 3×4KB） | 静态数组（内部 RAM） | ✅ |
+| 命令队列 | 无 | 固定容量结构体池（见设计 C） | 静态数组 | ⏸️ M3 |
+| cJSON 大对象 | 内部 RAM | 仅超大响应（>2KB）可走 PSRAM | 按需 | ⏸️ 见 4.5 |
 
-### 4.3 内存审计（借鉴 14 的 displayMemoryUsage）
+### 4.3 内存审计（✅ 已实施：apex_monitor）
 
-新增 `apex_monitor` 组件（或并入 apex_core）：
+新增 `apex_monitor` 组件（apex_frame/，已由 apex_core_init 调用）：
 - 周期任务（10s）打印：内部 DRAM 总量/已用/最大空闲块、PSRAM 总量/已用、堆最小历史剩余。
-- 触发条件：最小剩余堆 < 阈值（如 8KB）时升级为 WARN 并通知（apex_notify）。
+- 触发条件：内部 DRAM 剩余 < 8KB 且持续 2 个周期时升级为 WARN 告警（防抖，避免刷屏）。
 
 ### 4.4 验证
 
 - 连续执行 100 次 sync_add + 50 次 notify，`esp_get_minimum_free_heap_size()` 不下降（无泄漏）。
 - 日志中可见 PSRAM 分配生效（camera/大响应场景）。
+
+### 4.5 关于 cJSON 的决策（⏸️ 暂不启用 PSRAM hook）
+
+`utils.c` 中已有 `cJSON_Parse_PSRAM()`，但其内部 `cJSON_InitHooks()` 是**全局永久切换**——启用后所有后续 cJSON 分配（包括高频小对象）都会进 PSRAM，与"小对象留内部 RAM"原则冲突。
+**决策**：MQTT 报文有 4096 上限、加解密已缓冲池化，指令 JSON 规模可控，当前**不启用**。若未来接入摄像头/音频等大响应场景再评估。
 
 ---
 

@@ -7,6 +7,7 @@
 #include "apex_network.h"
 #include "apex_webserver.h"
 #include "apex_cmd_executor.h"
+#include "apex_monitor.h"
 #include "esp_task_wdt.h"
 #include "apex_notify.h"
 
@@ -142,6 +143,9 @@ esp_err_t apex_core_init(void)
     //          esp_get_minimum_free_heap_size());
 
     ESP_ERROR_CHECK(apex_notify_init());
+
+    // 内存审计：周期打印 DRAM/PSRAM 用量，异常时告警（设计 M2）
+    ESP_ERROR_CHECK(apex_monitor_init());
 
     ESP_LOGI(TAG, "所有模块初始化完成：");
     ESP_LOGI(TAG, "1. WiFi: APSTA模式");
