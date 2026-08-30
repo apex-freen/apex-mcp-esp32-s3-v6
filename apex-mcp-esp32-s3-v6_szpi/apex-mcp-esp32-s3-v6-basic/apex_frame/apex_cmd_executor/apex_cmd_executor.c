@@ -78,6 +78,9 @@ typedef struct
 static dedup_entry_t s_dedup_cache[DEDUP_CACHE_SIZE];
 static int s_dedup_index = 0;
 
+// 检查指定 msg_id 的槽位是否仍被占用（定义在 M3 worker 区）
+static bool cmd_is_active(const char *msg_id);
+
 static bool dedup_check_and_record(const char *msg_id)
 {
     if (!msg_id || msg_id[0] == '\0')

@@ -7,6 +7,10 @@
 
 #include "async_add.h"
 #include "sync_add.h"
+#include "bsp_board.h"
+#include "attitude_app.h"
+#include "sd_file_app.h"
+#include "led_app.h"
 
 static const char *TAG = "MAIN";
 void app_main(void)
@@ -16,6 +20,18 @@ void app_main(void)
     ESP_LOGI(TAG, "Main task stack free: %d bytes", uxHighWaterMark);
     // 初始化所有模块
     ESP_ERROR_CHECK(apex_core_init());
+
+    // 外设层：板级外设初始化（components/ 下，替换外设只改这里）
+    // 宽容处理：无对应硬件时框架照常运行，硬件指令返回错误
+    esp_err_t bsp_ret = bsp_board_init();
+    if (bsp_ret != ESP_OK)
+    {
+        ESP_LOGW(TAG, "板级外设初始化失败: %s (框架继续运行)", esp_err_to_name(bsp_ret));
+    }
+    // 硬件能力 → MCP 工具（必须在 apex_core_init 之后注册，与硬件是否就绪无关）
+    attitude_app_init();
+    sd_file_app_init();
+    led_app_init();
 
     async_add_init();
     sync_add_init();

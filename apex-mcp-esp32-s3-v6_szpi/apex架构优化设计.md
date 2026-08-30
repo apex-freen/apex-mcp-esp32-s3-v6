@@ -271,25 +271,46 @@ typedef struct {
 
 ### 6.1 组件布局
 
+> ✅ = M4 已实施；⏸️ = 待后续里程碑
+
 ```
 apex_frame/                        # 平台层（芯片功能 + 通用服务，不依赖 components）
 components/
-├── bsp_board/                     # ⭐ 新增：板级支持包（组件化 esp32_s3_szp）
-│   ├── include/bsp_board.h        #   初始化/外设句柄
-│   ├── include/bsp_pins.h         #   ⭐ 引脚宏集中定义（学 esp32_s3_szp.h）
-│   ├── bsp_i2c.c                  #   I2C0 总线（复用 i2c_master 新驱动，IDF v6 兼容）
-│   ├── bsp_lcd.c                  #   ST7789 + 背光（esp_lcd 框架）
-│   ├── bsp_camera.c               #   OV2640 + PSRAM 帧缓冲
-│   ├── bsp_audio.c                #   ES8311/ES7210（i2s_std/i2s_tdm）
-│   ├── bsp_imu.c                  #   QMI8658
-│   ├── bsp_sd.c                   #   SDMMC
-│   └── bsp_touch.c                #   FT5x06 + LVGL 适配
+├── bsp_board/                     # ✅ 已实施（组件化 esp32_s3_szp 的起点）
+│   ├── include/bsp_board.h        #   板级入口（不暴露驱动类型，应用层零驱动依赖）
+│   ├── include/bsp_pins.h         #   ⭐ 引脚宏集中定义（学 esp32_s3_szp.h）✅
+│   ├── include/bsp_i2c.h          #   I2C0 内部接口（新 i2c_master 驱动，IDF v6 兼容）✅
+│   ├── include/bsp_imu.h          #   QMI8658 API ✅
+│   ├── bsp_board.c / bsp_i2c.c    #   ✅
+│   ├── bsp_imu.c                  #   ✅（从实战派 02/14 移植）
+│   ├── bsp_lcd.c                  #   ⏸️ ST7789 + 背光（esp_lcd 框架）
+│   ├── bsp_camera.c               #   ⏸️ OV2640 + PSRAM 帧缓冲
+│   ├── bsp_audio.c                #   ⏸️ ES8311/ES7210（i2s_std/i2s_tdm）
+│   ├── bsp_sd.c                   #   ✅ SDMMC（从实战派 03/14 移植）
+│   └── bsp_touch.c                #   ⏸️ FT5x06 + LVGL 适配
 └── apps/                          # 硬件能力 → MCP 工具
-    ├── camera_app.c               #   cameraStream（异步 handler）
-    ├── music_app.c                #   audioPlay（持久化 + stop）
-    ├── attitude_app.c             #   attitudeGet（同步）
+    ├── attitude_app.c             #   ✅ attitudeGet（同步，首个硬件 handler 范例）
+    ├── sd_file_app.c              #   ✅ sdList/sdRead/sdWrite（SD 文件操作）
+    ├── led_app.c                  #   ✅ ledBlink（持久化 + stop 模式示范）
+    ├── camera_app.c               #   ⏸️ cameraStream（异步 handler）
+    ├── music_app.c                #   ⏸️ audioPlay（持久化 + stop）
     └── ...
 ```
+
+**M5 已落地的要点**：
+- **三种 handler 模式齐备**（后续扩展模板）：
+  | 模式 | 范例 | 说明 |
+  | --- | --- | --- |
+  | 同步 | attitudeGet / sdList / sdRead / sdWrite | 返回 APEX_OK，框架自动响应 |
+  | 持久化+stop | ledBlink | `is_persistent=true` + `stop_handler`，由系统 stop 指令终止 |
+  | 异步 | async_add（示例） | `APEX_ASYNC_OK` + `apex_cmd_finish` |
+- **真实外设**：bsp_sd（SDMMC 1 线，从实战派 03/14 移植）已并入 bsp_board，SD 文件指令可落盘。
+- **IDF v6 组件命名**：bsp_board 依赖已按 v6 实际组件名（`esp_driver_i2c`/`esp_driver_gpio`/`esp_driver_sdmmc`）配置。
+
+**M4 已落地的要点**：
+- 依赖方向验证：`bsp_board` 只依赖 ESP-IDF 驱动；`attitude_app` 只依赖 `bsp_board + apex_cmd_executor`；apex_frame 零改动。
+- `bsp_board.h` 不暴露 `driver/i2c_master.h`（内部拆 `bsp_i2c.h`），应用层无需感知驱动组件——外设封装边界干净。
+- 无硬件宽容启动：`bsp_board_init()` 失败仅告警，固件照常运行，`attitudeGet` 指令运行时报错而非崩溃。
 
 ### 6.2 硬件能力 ↔ handler 映射（直接复用实战派代码逻辑）
 
