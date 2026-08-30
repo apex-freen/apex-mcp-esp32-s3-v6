@@ -173,7 +173,9 @@ AI 要播放音乐/显示图片，文件必须先到设备：
 - [ ] **P4**：audioPlay(WAV) / audioRecord / volumeSet —— ⏸️ 延后
 - [ ] **P5**（进行中）：
   - [x] `cameraStream`（✅ MJPEG 流）：独立 httpd(8080) `/stream`（multipart/x-mixed-replace，~10fps）；`cameraStreamStart` 持久化 + stop；流运行中 cameraCapture 返回 BUSY；80 端口 webserver 不受阻塞
-  - [ ] `wifiScan`（三级策略，见下）：apex_network 加 `apex_wifi_scan(force)` 原子扫描窗口
+  - [x] `wifiScan`（✅ 三级策略）：apex_network 加 `apex_wifi_scan(force)` + 原子扫描窗口
+    - 关键：`s_fsm_paused` 抑制扫描断连误判（MQTT 不闪断）；BSSID 快速重连秒级恢复；10s 周期重连兜底
+    - 顺手修复 apex_network/CMakeLists SRCS 重复 bug
   - 已记录 backlog（后续按需）：`bleHidSend`(NimBLE 键盘) / `speechRec`(esp-sr 离线语音, 需评估 v6 兼容+模型分区) / `faceDetect`(esp-dl, 与 MCP 价值弱)
 
 ### wifiScan 三级策略（设计定稿）

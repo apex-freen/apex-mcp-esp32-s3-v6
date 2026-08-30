@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include <string.h>
+#include <stdlib.h>
 
 static const char *TAG = "APEX_NET";
 
@@ -34,6 +35,15 @@ static EventGroupHandle_t s_net_internal_eg = NULL;
 static esp_netif_t *s_sta_netif = NULL;
 static esp_netif_t *s_ap_netif = NULL;
 
+// ============ WiFi 扫描支持（原子扫描窗口 + 缓存，三级策略） ============
+#define APEX_SCAN_CACHE_MAX 15
+static volatile bool s_fsm_paused = false; // 扫描窗口内暂停状态机（抑制断连误判）
+static bool s_scan_was_connected = false;  // 扫描前是否已连接 STA
+static wifi_ap_record_t s_scan_ap_info;    // 扫描前 AP 上下文（快速重连用）
+static wifi_ap_record_t s_scan_cache[APEX_SCAN_CACHE_MAX];
+static uint16_t s_scan_cache_count = 0;
+static uint32_t s_scan_cache_at_s = 0; // 缓存时间（uptime 秒）
+
 // --- 定时器回调函数（在 Timer Daemon 任务中执行，只负责发信号） ---
 static void tmr_cb_ap_off(TimerHandle_t xTimer) { xEventGroupSetBits(s_net_internal_eg, INTERNAL_BIT_TMR_AP_OFF); }
 static void tmr_cb_ap_on(TimerHandle_t xTimer) { xEventGroupSetBits(s_net_internal_eg, INTERNAL_BIT_TMR_AP_ON); }
@@ -50,6 +60,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     }
     else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED)
     {
+        if (s_fsm_paused)
+        {
+            // 扫描窗口内的断连是预期行为（单射频扫描必断），不广播、不进入离线逻辑
+            ESP_LOGI(TAG, "扫描窗口内连接断开（预期），忽略");
+            return;
+        }
 
         ESP_LOGI(TAG, "已断开连接！");
         apex_event_send(APEX_EVENT_NET_DISCONNECTED, NULL, 0);
@@ -176,13 +192,21 @@ static void network_fsm_task(void *pv)
 
         if (bits & INTERNAL_BIT_DISCONNECTED)
         {
-            ESP_LOGW(TAG, "连接断开，进入离线处理逻辑");
-            apex_event_send(APEX_EVENT_NET_DISCONNECTED, NULL, 0);
+            if (s_fsm_paused)
+            {
+                // 扫描窗口内，跳过离线逻辑（由 scan_resume 负责快速重连兜底）
+                ESP_LOGI(TAG, "扫描窗口内断开，跳过离线逻辑");
+            }
+            else
+            {
+                ESP_LOGW(TAG, "连接断开，进入离线处理逻辑");
+                apex_event_send(APEX_EVENT_NET_DISCONNECTED, NULL, 0);
 
-            // 状态切换：停止在线定时器，启动离线和重连定时器
-            xTimerStop(s_tmr_ap_off, 0);
-            xTimerStart(s_tmr_ap_on, 0);     // 启动 60s 开启 AP 倒计时
-            xTimerStart(s_tmr_reconnect, 0); // 启动 10s 循环重连
+                // 状态切换：停止在线定时器，启动离线和重连定时器
+                xTimerStop(s_tmr_ap_off, 0);
+                xTimerStart(s_tmr_ap_on, 0);     // 启动 60s 开启 AP 倒计时
+                xTimerStart(s_tmr_reconnect, 0); // 启动 10s 循环重连
+            }
         }
 
         // ==================== [定时器超时事件处理] ====================
@@ -343,4 +367,122 @@ wifi_ap_record_t *apex_wifi_mgr_scan_and_get_results(uint16_t *out_count)
         free(records);
         return NULL;
     }
+}
+
+// ==========================================
+// WiFi 扫描（三级策略：缓存 / 原子窗口 / 未连接直扫）
+// ==========================================
+
+// 暂停状态机：抑制扫描导致的断连误判（MQTT 不闪断），记录 AP 上下文
+static void scan_pause(void)
+{
+    s_fsm_paused = true;
+    s_scan_was_connected = (esp_wifi_sta_get_ap_info(&s_scan_ap_info) == ESP_OK);
+    // 防止扫描期间 10s 重连定时器触发 esp_wifi_connect（与扫描冲突）
+    xTimerStop(s_tmr_reconnect, 0);
+    ESP_LOGI(TAG, "扫描窗口开始 (之前已连接: %d)", s_scan_was_connected);
+}
+
+// 恢复状态机：BSSID 快速重连（秒级），失败由 10s 周期重连兜底
+static void scan_resume(void)
+{
+    s_fsm_paused = false;
+
+    if (s_scan_was_connected)
+    {
+        // 用记录的 BSSID + 信道直接重连，跳过信道扫描（快）
+        wifi_config_t cfg = {0};
+        strncpy((char *)cfg.sta.ssid, g_apex_config.wifi_sta.ssid, sizeof(cfg.sta.ssid));
+        strncpy((char *)cfg.sta.password, g_apex_config.wifi_sta.password, sizeof(cfg.sta.password));
+        cfg.sta.bssid_set = 1;
+        memcpy(cfg.sta.bssid, s_scan_ap_info.bssid, 6);
+        cfg.sta.channel = s_scan_ap_info.primary;
+        esp_wifi_set_config(WIFI_IF_STA, &cfg);
+        esp_wifi_connect();
+
+        // 兜底：重启 10s 周期重连；若快速重连成功，GOT_IP 时 fsm 会自动停止
+        xTimerStart(s_tmr_reconnect, 0);
+    }
+    ESP_LOGI(TAG, "扫描窗口结束");
+}
+
+// 阻塞扫描并更新缓存
+static esp_err_t scan_and_cache(void)
+{
+    uint16_t ap_num = 0;
+    wifi_scan_config_t scan_config = {.show_hidden = false};
+
+    ESP_LOGI(TAG, "开始 Wi-Fi 扫描...");
+    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "扫描失败: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    esp_wifi_scan_get_ap_num(&ap_num);
+    if (ap_num > APEX_SCAN_CACHE_MAX)
+        ap_num = APEX_SCAN_CACHE_MAX;
+
+    if (ap_num == 0)
+    {
+        s_scan_cache_count = 0;
+        return ESP_OK;
+    }
+
+    wifi_ap_record_t *tmp = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * ap_num);
+    if (tmp == NULL)
+        return ESP_ERR_NO_MEM;
+
+    if (esp_wifi_scan_get_ap_records(&ap_num, tmp) == ESP_OK)
+    {
+        memcpy(s_scan_cache, tmp, sizeof(wifi_ap_record_t) * ap_num);
+        s_scan_cache_count = ap_num;
+        s_scan_cache_at_s = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
+    }
+    free(tmp);
+    return ESP_OK;
+}
+
+esp_err_t apex_wifi_scan(wifi_ap_record_t **records, uint16_t *count, bool force)
+{
+    if (records == NULL || count == NULL)
+        return ESP_ERR_INVALID_ARG;
+    *records = NULL;
+    *count = 0;
+
+    wifi_ap_record_t ap_info;
+    bool connected = (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK);
+
+    // 策略 1：已连接且未强制 → 返回缓存（不断网）
+    if (connected && !force)
+    {
+        if (s_scan_cache_count == 0)
+            return ESP_ERR_NOT_FOUND; // 尚无缓存
+        wifi_ap_record_t *out = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * s_scan_cache_count);
+        if (out == NULL)
+            return ESP_ERR_NO_MEM;
+        memcpy(out, s_scan_cache, sizeof(wifi_ap_record_t) * s_scan_cache_count);
+        *records = out;
+        *count = s_scan_cache_count;
+        return ESP_OK;
+    }
+
+    // 策略 2/3：原子扫描窗口（未连接时无断连损失，直接扫）
+    scan_pause();
+    esp_err_t err = scan_and_cache();
+    scan_resume();
+    if (err != ESP_OK)
+        return err;
+
+    if (s_scan_cache_count == 0)
+        return ESP_ERR_NOT_FOUND;
+
+    wifi_ap_record_t *out = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * s_scan_cache_count);
+    if (out == NULL)
+        return ESP_ERR_NO_MEM;
+    memcpy(out, s_scan_cache, sizeof(wifi_ap_record_t) * s_scan_cache_count);
+    *records = out;
+    *count = s_scan_cache_count;
+    return ESP_OK;
 }

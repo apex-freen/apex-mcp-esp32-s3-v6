@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "apex_network.c" "apex_network.c"
+    SRCS "apex_network.c"
     INCLUDE_DIRS "include"                     # 这里的 include 是 apex_config 自己的头文件目录
     PRIV_INCLUDE_DIRS 
     REQUIRES esp_wifi                    # 声明依赖 NVS 驱动

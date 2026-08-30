@@ -50,3 +50,18 @@ void apex_get_wifi_status_text(char *status_text, size_t len);
  * @note 调用者必须负责 free() 返回的指针 !!
  */
 wifi_ap_record_t *apex_wifi_mgr_scan_and_get_results(uint16_t *out_count);
+
+/**
+ * @brief WiFi 扫描（三级策略，智能体友好）
+ *
+ * - force=false 且已连接 STA：返回扫描缓存（不断网，可能陈旧）
+ * - force=true 且已连接：执行"原子扫描窗口"（短暂断连 1~2s，BSSID 快速重连秒级恢复，
+ *   MQTT 不闪断）；扫描期间状态机暂停，扫描后自动快速重连，失败由 10s 周期重连兜底
+ * - 未连接：直接实时扫描（无连接损失）
+ *
+ * @param records 输出 AP 数组（调用方必须 free）
+ * @param count   输出 AP 数量
+ * @param force   true=强制实时扫描（已连接时接受短暂断连）
+ * @return ESP_OK / ESP_ERR_NOT_FOUND(无结果) / 其他错误
+ */
+esp_err_t apex_wifi_scan(wifi_ap_record_t **records, uint16_t *count, bool force);
